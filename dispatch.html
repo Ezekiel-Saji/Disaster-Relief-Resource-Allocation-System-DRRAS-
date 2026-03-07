@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dispatch Resources - DRRAS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .split-layout {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .split-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fa-solid fa-hand-holding-heart"></i> DRRAS
+        </div>
+        <button class="menu-toggle" id="menuToggle">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <ul class="nav-links" id="navLinks">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><a href="affected-areas.html">Affected Areas</a></li>
+            <li><a href="resource-requests.html">Requests</a></li>
+            <li><a href="resource-allocation.html">Allocation</a></li>
+            <li><a href="dispatch.html" class="active">Dispatch</a></li>
+            <li><a href="delivery-report.html">Deliveries</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <div>
+                <h1>Dispatch Logistics</h1>
+                <p>Manage transport and deployment of allocated resources</p>
+            </div>
+        </div>
+
+        <div class="split-layout">
+            <div class="card">
+                <h2>Dispatch Form</h2>
+                <form id="dispatchForm">
+                    <div class="form-group">
+                        <label class="form-label" for="allocationId">Allocation ID</label>
+                        <select class="form-control" id="allocationId" required>
+                            <option value="">Select Allocation to Dispatch...</option>
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="dispatchDate">Dispatch Date</label>
+                        <input type="date" class="form-control" id="dispatchDate" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="expectedDelivery">Expected Delivery Date</label>
+                        <input type="date" class="form-control" id="expectedDelivery" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%">
+                        <i class="fa-solid fa-truck-fast"></i> Initiate Dispatch
+                    </button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Active Dispatches</h2>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Dispatch ID</th>
+                                <th>Allocation ID</th>
+                                <th>Dispatch Date</th>
+                                <th>ETA</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dispatchesList">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/shared.js"></script>
+    <script src="js/dispatch.js"></script>
+</body>
+
+</html>

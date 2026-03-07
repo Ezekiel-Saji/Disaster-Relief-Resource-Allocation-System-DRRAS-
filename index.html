@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - DRRAS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Using FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fa-solid fa-hand-holding-heart"></i> DRRAS
+        </div>
+        <button class="menu-toggle" id="menuToggle">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <ul class="nav-links" id="navLinks">
+            <li><a href="index.html" class="active">Dashboard</a></li>
+            <li><a href="affected-areas.html">Affected Areas</a></li>
+            <li><a href="resource-requests.html">Requests</a></li>
+            <li><a href="resource-allocation.html">Allocation</a></li>
+            <li><a href="dispatch.html">Dispatch</a></li>
+            <li><a href="delivery-report.html">Deliveries</a></li>
+            <li><a href="inventory.html">Inventory</a></li>
+        </ul>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <div>
+                <h1>System Overview</h1>
+                <p>Disaster Relief Resource Allocation System Dashboard</p>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card stat-card">
+                <div class="stat-icon" style="color: var(--alert-danger)">
+                    <i class="fa-solid fa-house-crack"></i>
+                </div>
+                <div class="stat-title">Total Disasters</div>
+                <div class="stat-value" id="totalDisasters">-</div>
+            </div>
+            
+            <div class="card stat-card">
+                <div class="stat-icon" style="color: var(--alert-warning)">
+                    <i class="fa-solid fa-map-location-dot"></i>
+                </div>
+                <div class="stat-title">Affected Areas</div>
+                <div class="stat-value" id="affectedAreas">-</div>
+            </div>
+
+            <div class="card stat-card">
+                <div class="stat-icon" style="color: #6366f1">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                </div>
+                <div class="stat-title">Pending Requests</div>
+                <div class="stat-value" id="pendingRequests">-</div>
+            </div>
+
+            <div class="card stat-card">
+                <div class="stat-icon" style="color: var(--accent-color)">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <div class="stat-title">Available Resources</div>
+                <div class="stat-value" id="availableResources">-</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Activity</h2>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Action</th>
+                            <th>Location/Target</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentActivityList">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/shared.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
