@@ -104,10 +104,8 @@ export default function AllocationsPage() {
         </div>
         
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger>
-            <Button className="gap-2 bg-primary hover:bg-primary/90 shadow-md">
-              <PlusCircle className="w-4 h-4" /> Create New Allocation
-            </Button>
+          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90 shadow-md" />}>
+            <PlusCircle className="w-4 h-4" /> Create New Allocation
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -199,12 +197,10 @@ export default function AllocationsPage() {
                   </TableCell>
                   <TableCell className="text-right pr-6">
                     <div className="flex justify-end items-center gap-1">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" />}>
                             <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                          </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEdit(alloc)} className="gap-2 cursor-pointer">
                             <Edit className="w-4 h-4" /> Edit Allocation

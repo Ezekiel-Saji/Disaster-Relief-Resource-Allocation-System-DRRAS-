@@ -103,10 +103,8 @@ export default function DisastersPage() {
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger>
-            <Button className="gap-2 bg-primary hover:bg-primary/90">
-              <PlusCircle className="w-4 h-4" /> Add Disaster
-            </Button>
+          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90" />}>
+            <PlusCircle className="w-4 h-4" /> Add Disaster
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>

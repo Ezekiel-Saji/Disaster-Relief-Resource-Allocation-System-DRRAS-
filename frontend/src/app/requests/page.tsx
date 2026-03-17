@@ -65,10 +65,8 @@ export default function RequestsPage() {
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger>
-            <Button className="gap-2 bg-orange-500 hover:bg-orange-600 border-none text-white">
-              <PlusCircle className="w-4 h-4" /> New Request
-            </Button>
+          <DialogTrigger render={<Button className="gap-2 bg-orange-500 hover:bg-orange-600 border-none text-white" />}>
+            <PlusCircle className="w-4 h-4" /> New Request
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>

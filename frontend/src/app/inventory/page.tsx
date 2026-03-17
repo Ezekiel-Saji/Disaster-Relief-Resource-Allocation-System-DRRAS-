@@ -110,10 +110,8 @@ export default function InventoryPage() {
         </div>
         
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger>
-            <Button className="gap-2 shadow-lg hover:shadow-primary/20 transition-all">
-              <PlusCircle className="w-4 h-4" /> Add Inventory Item
-            </Button>
+          <DialogTrigger render={<Button className="gap-2 shadow-lg hover:shadow-primary/20 transition-all" />}>
+            <PlusCircle className="w-4 h-4" /> Add Inventory Item
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -279,10 +277,8 @@ export default function InventoryPage() {
                   </TableCell>
                   <TableCell className="text-right pr-6">
                     <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
+                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
+                        <MoreVertical className="w-4 h-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEdit(item)} className="gap-2 cursor-pointer">

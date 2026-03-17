@@ -63,10 +63,8 @@ export default function AreasPage() {
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" /> Add Affected Area
-            </Button>
+          <DialogTrigger render={<Button className="gap-2" />}>
+            <Plus className="w-4 h-4" /> Add Affected Area
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
