@@ -49,9 +49,9 @@ export default function DisastersPage() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('disaster')
+        .from('v_disasters')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('disaster_id', { ascending: true });
 
       if (error) throw error;
       setDisasters(data || []);

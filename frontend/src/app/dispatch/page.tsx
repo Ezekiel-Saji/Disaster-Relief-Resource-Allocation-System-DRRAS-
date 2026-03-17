@@ -63,14 +63,14 @@ export default function DispatchPage() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("dispatches")
+        .from("v_dispatches")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("dispatch_date", { ascending: false });
 
       if (error) throw error;
       setDispatches(data || []);
     } catch (error) {
-      console.error("Error fetching dispatches:", error);
+      console.log(JSON.stringify(error, null, 2));
     } finally {
       setLoading(false);
     }
@@ -79,32 +79,34 @@ export default function DispatchPage() {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+
     try {
-      const { error } = await supabase.from("dispatches").insert([
+      const { data, error } = await supabase.rpc(
+        "fn_create_dispatch",
         {
-          allocation_id: parseInt(formData.allocation_id),
-          dispatch_date: formData.dispatch_date,
-          expected_delivery_date: formData.expected_delivery_date || null,
-          status: formData.status,
-        },
-      ]);
+          p_allocation_id: parseInt(formData.allocation_id),
+          p_expected_delivery: formData.expected_delivery_date || null
+        }
+      );
 
       if (error) throw error;
 
-      await fetchDispatches();
-      setIsOpen(false);
-      setFormData({
-        allocation_id: "",
-        dispatch_date: new Date().toISOString().split("T")[0],
-        expected_delivery_date: "",
-        status: "Pending",
-      });
-    } catch (error) {
-      console.error("Error creating dispatch:", error);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    await fetchDispatches();
+
+    setIsOpen(false);
+    setFormData({
+      allocation_id: "",
+      dispatch_date: new Date().toISOString().split("T")[0],
+      expected_delivery_date: "",
+      status: "Pending",
+    });
+
+  } catch (error) {
+    console.log(JSON.stringify(error, null, 2));
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const inTransit = dispatches.filter((d) => d.status === "In Transit").length;
   const delivered = dispatches.filter((d) => d.status === "Delivered").length;
