@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Truck, PlusCircle, Calendar, Hash, Loader2 } from "lucide-react";
+import { Truck, PlusCircle, Calendar, Hash, Loader2, MapPin, Package } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,41 +22,44 @@ import { supabase } from "@/lib/supabase";
 
 interface Dispatch {
   dispatch_id: number;
+  allocation_id: number;
+  destination_area: string;
+  resource: string;
+  quantity: number;
+  from_center: string;
   dispatch_date: string;
   expected_delivery_date: string | null;
   status: string;
-  allocation_id: number;
+  delivery_reported: boolean;
 }
 
 const STATUS_VARIANTS: Record<string, "outline" | "default" | "secondary" | "destructive"> = {
   "In Transit": "outline",
   "Delivered": "default",
   "Pending": "secondary",
-  "Delayed": "outline",
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  "In Transit": "border-blue-500 text-blue-600",
-  "Delivered": "bg-green-500 hover:bg-green-600 text-white",
-  "Pending": "",
-  "Delayed": "border-red-400 text-red-600",
+  "In Transit": "border-blue-500 text-blue-600 font-bold bg-blue-50",
+  "Delivered": "bg-green-500 hover:bg-green-600 text-white font-bold",
+  "Pending": "bg-amber-100 text-amber-700 border-none font-bold",
 };
 
 export default function DispatchPage() {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readyAllocations, setReadyAllocations] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     allocation_id: "",
-    dispatch_date: new Date().toISOString().split("T")[0],
     expected_delivery_date: "",
-    status: "Pending",
   });
 
   useEffect(() => {
     fetchDispatches();
+    fetchMetadata();
   }, []);
 
   async function fetchDispatches() {
@@ -76,12 +79,25 @@ export default function DispatchPage() {
     }
   }
 
+  async function fetchMetadata() {
+    try {
+      const { data, error } = await supabase
+        .from("v_ready_for_dispatch")
+        .select("*");
+      
+      if (error) throw error;
+      setReadyAllocations(data || []);
+    } catch (error) {
+      console.log(JSON.stringify(error, null, 2));
+    }
+  }
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
 
     try {
-      const { data, error } = await supabase.rpc(
+      const { error } = await supabase.rpc(
         "fn_create_dispatch",
         {
           p_allocation_id: parseInt(formData.allocation_id),
@@ -91,26 +107,25 @@ export default function DispatchPage() {
 
       if (error) throw error;
 
-    await fetchDispatches();
+      await fetchDispatches();
+      await fetchMetadata();
 
-    setIsOpen(false);
-    setFormData({
-      allocation_id: "",
-      dispatch_date: new Date().toISOString().split("T")[0],
-      expected_delivery_date: "",
-      status: "Pending",
-    });
+      setIsOpen(false);
+      setFormData({
+        allocation_id: "",
+        expected_delivery_date: "",
+      });
 
-  } catch (error) {
-    console.log(JSON.stringify(error, null, 2));
-  } finally {
-    setSubmitting(false);
-  }
-};
+    } catch (error) {
+      console.log(JSON.stringify(error, null, 2));
+      alert("Failed to create dispatch. Please check if the allocation exists and is ready.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-  const inTransit = dispatches.filter((d) => d.status === "In Transit").length;
-  const delivered = dispatches.filter((d) => d.status === "Delivered").length;
-  const pending = dispatches.filter((d) => d.status === "Pending").length;
+  const inTransitCount = dispatches.filter((d) => d.status === "In Transit").length;
+  const deliveredCount = dispatches.filter((d) => d.status === "Delivered").length;
 
   return (
     <div className="space-y-6">
@@ -121,79 +136,61 @@ export default function DispatchPage() {
         </div>
 
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90" />}>
+          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90 font-bold shadow-md" />}>
             <PlusCircle className="w-4 h-4" /> New Dispatch
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Create Dispatch Order</DialogTitle>
+              <DialogTitle className="text-2xl font-bold tracking-tight text-primary">Create Dispatch Order</DialogTitle>
               <DialogDescription>
-                Link a dispatch to an existing allocation and set its delivery timeline.
+                Link a dispatch to an authorized allocation not yet in transit.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAdd}>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="allocation_id" className="flex items-center gap-2">
-                    <Hash className="w-4 h-4 text-muted-foreground" /> Allocation ID
+                    <Hash className="w-4 h-4 text-muted-foreground" /> Ready Allocation
                   </Label>
-                  <Input
-                    id="allocation_id"
-                    type="number"
-                    placeholder="e.g. 1"
-                    value={formData.allocation_id}
-                    onChange={(e) => setFormData({ ...formData, allocation_id: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="dispatch_date">Dispatch Date</Label>
-                    <Input
-                      id="dispatch_date"
-                      type="date"
-                      value={formData.dispatch_date}
-                      onChange={(e) => setFormData({ ...formData, dispatch_date: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="expected_delivery_date">Expected Delivery</Label>
-                    <Input
-                      id="expected_delivery_date"
-                      type="date"
-                      value={formData.expected_delivery_date}
-                      onChange={(e) => setFormData({ ...formData, expected_delivery_date: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(val) => setFormData({ ...formData, status: val ?? "Pending" })}
+                  <Select 
+                    value={formData.allocation_id} 
+                    onValueChange={(val) => setFormData({...formData, allocation_id: val ?? ""})}
                   >
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Select status" />
+                    <SelectTrigger id="allocation_id" className="bg-muted/30">
+                      <SelectValue placeholder="Select Allocation" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                      <SelectItem value="In Transit">In Transit</SelectItem>
-                      <SelectItem value="Delivered">Delivered</SelectItem>
-                      <SelectItem value="Delayed">Delayed</SelectItem>
+                      {readyAllocations.map((alloc) => (
+                        <SelectItem key={alloc.allocation_id} value={alloc.allocation_id.toString()}>
+                          Alloc #{alloc.allocation_id} - {alloc.resource} ({alloc.quantity})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="expected_delivery_date" className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" /> Expected Delivery Date
+                  </Label>
+                  <Input
+                    id="expected_delivery_date"
+                    type="date"
+                    value={formData.expected_delivery_date}
+                    onChange={(e) => setFormData({ ...formData, expected_delivery_date: e.target.value })}
+                    required
+                    className="bg-muted/30"
+                  />
+                </div>
               </div>
               <DialogFooter>
-                <Button type="submit" className="w-full" disabled={submitting}>
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 font-bold" disabled={submitting}>
                   {submitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
+                      Dispatching...
                     </>
                   ) : (
-                    "Create Dispatch"
+                    "Authorize Dispatch"
                   )}
                 </Button>
               </DialogFooter>
@@ -203,42 +200,29 @@ export default function DispatchPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-blue-500/5 border-none">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="bg-blue-50 border-blue-100">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">In Transit</p>
-                <h3 className="text-2xl font-bold mt-1 text-blue-600">{inTransit}</h3>
+                <p className="text-sm font-bold text-blue-600 uppercase tracking-wider">In Transit</p>
+                <h3 className="text-3xl font-bold mt-1 text-blue-800">{inTransitCount}</h3>
               </div>
-              <div className="p-2 bg-blue-500/10 rounded-full">
-                <Truck className="w-5 h-5 text-blue-500" />
+              <div className="p-3 bg-blue-500/10 rounded-xl">
+                <Truck className="w-6 h-6 text-blue-600" />
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-green-500/5 border-none">
+        <Card className="bg-green-50 border-green-100">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Delivered</p>
-                <h3 className="text-2xl font-bold mt-1 text-green-600">{delivered}</h3>
+                <p className="text-sm font-bold text-green-600 uppercase tracking-wider">Confirmed Delivered</p>
+                <h3 className="text-3xl font-bold mt-1 text-green-800">{deliveredCount}</h3>
               </div>
-              <div className="p-2 bg-green-500/10 rounded-full">
-                <Truck className="w-5 h-5 text-green-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/30 border-none">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Pending</p>
-                <h3 className="text-2xl font-bold mt-1">{pending}</h3>
-              </div>
-              <div className="p-2 bg-muted rounded-full">
-                <Truck className="w-5 h-5 text-muted-foreground" />
+              <div className="p-3 bg-green-500/10 rounded-xl">
+                <Package className="w-6 h-6 text-green-600" />
               </div>
             </div>
           </CardContent>
@@ -247,61 +231,75 @@ export default function DispatchPage() {
 
       {/* Dispatch Table */}
       <Card className="border-none shadow-md overflow-hidden">
-        <CardHeader className="bg-muted/30 pb-4">
-          <CardTitle className="text-xl flex items-center gap-2">
+        <CardHeader className="bg-muted/30 pb-4 border-b">
+          <CardTitle className="text-xl flex items-center gap-2 font-bold">
             <Truck className="w-5 h-5 text-primary" />
-            Dispatch Log
+            Active Dispatches Hub
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader className="bg-muted/10">
+            <TableHeader className="bg-muted/10 font-bold">
               <TableRow>
-                <TableHead className="pl-6 w-32">Dispatch ID</TableHead>
-                <TableHead>Allocation ID</TableHead>
-                <TableHead>Dispatch Date</TableHead>
-                <TableHead>Expected Delivery</TableHead>
-                <TableHead className="text-right pr-6">Status</TableHead>
+                <TableHead className="pl-6 w-32 font-bold">Disp ID</TableHead>
+                <TableHead className="font-bold">Shipment Details</TableHead>
+                <TableHead className="font-bold">Route</TableHead>
+                <TableHead className="font-bold text-center">Dates</TableHead>
+                <TableHead className="text-right pr-6 font-bold">Transit Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center">
+                  <TableCell colSpan={5} className="h-48 text-center">
                     <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      <p>Loading dispatches...</p>
+                      <p className="font-medium">Fetching dispatch cycles...</p>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : dispatches.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                    No dispatches found. Create one to get started.
+                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic">
+                    No active shipments in transit.
                   </TableCell>
                 </TableRow>
               ) : (
                 dispatches.map((d) => (
                   <TableRow key={d.dispatch_id} className="hover:bg-muted/5 transition-colors">
-                    <TableCell className="pl-6 font-semibold text-primary">#{d.dispatch_id}</TableCell>
+                    <TableCell className="pl-6 font-extrabold text-blue-700">#{d.dispatch_id}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="gap-1">
-                        <Hash className="w-3 h-3" /> Alloc #{d.allocation_id}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
-                        <Calendar className="w-3.5 h-3.5" /> {d.dispatch_date}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {d.expected_delivery_date ? (
-                        <span className="flex items-center gap-1.5 text-muted-foreground">
-                          <Calendar className="w-3.5 h-3.5" /> {d.expected_delivery_date}
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-bold text-sm flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5 text-blue-500" />
+                          {d.resource}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground/50 text-sm">—</span>
-                      )}
+                        <span className="text-xs font-semibold text-green-700 ml-5">
+                          {d.quantity?.toLocaleString()} Units
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5 text-xs font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <Building2 className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">From:</span> {d.from_center}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">To:</span> {d.destination_area}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center font-medium">
+                      <div className="flex flex-col gap-1 items-center">
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-tight">
+                          <Calendar className="w-3 h-3" /> Dispatched: {d.dispatch_date ? new Date(d.dispatch_date).toLocaleDateString() : 'N/A'}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-blue-600 font-bold uppercase tracking-tight">
+                          <Calendar className="w-3 h-3" /> ETA: {d.expected_delivery_date ? new Date(d.expected_delivery_date).toLocaleDateString() : 'TBD'}
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <Badge
@@ -319,5 +317,31 @@ export default function DispatchPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Helper icons needed by the UI
+function Building2(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+      <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+      <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+      <path d="M10 6h4" />
+      <path d="M10 10h4" />
+      <path d="M10 14h4" />
+      <path d="M10 18h4" />
+    </svg>
   );
 }

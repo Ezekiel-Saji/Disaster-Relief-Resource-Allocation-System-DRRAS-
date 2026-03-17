@@ -1,19 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
-  CheckCircle2, 
   PlusCircle, 
   PackageMinus, 
-  MoreVertical, 
-  Edit, 
-  Trash2,
   Calendar,
   Building2,
-  Hash
+  Hash,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import {
   Dialog,
@@ -26,73 +24,94 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/lib/supabase";
+
+interface Allocation {
+  allocation_id: number;
+  request_id: number;
+  requested_by: string;
+  resource: string;
+  source_center: string;
+  center_id: number;
+  quantity: number;
+  date: string;
+  request_status: string;
+}
 
 export default function AllocationsPage() {
-  const [allocations, setAllocations] = useState([
-    { allocation_id: 1, request_id: 102, center: "South Central", quantity: 200, date: "2024-03-07" },
-    { allocation_id: 2, request_id: 103, center: "North Hub", quantity: 50, date: "2024-03-07" },
-  ]);
-
+  const [allocations, setAllocations] = useState<Allocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [currentAlloc, setCurrentAlloc] = useState<any>(null);
+  
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [centers, setCenters] = useState<any[]>([]);
+  
   const [formData, setFormData] = useState({
     request_id: "",
-    center: "",
+    center_id: "",
     quantity: ""
   });
 
-  const handleAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newAlloc = {
-      allocation_id: allocations.length + 1,
-      request_id: parseInt(formData.request_id) || 0,
-      center: formData.center,
-      quantity: parseInt(formData.quantity) || 0,
-      date: new Date().toISOString().split('T')[0]
-    };
-    setAllocations([...allocations, newAlloc]);
-    setIsAddOpen(false);
-    setFormData({ request_id: "", center: "", quantity: "" });
-  };
+  useEffect(() => {
+    fetchAllocations();
+    fetchMetadata();
+  }, []);
 
-  const handleEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAllocations(allocations.map(alloc => 
-      alloc.allocation_id === currentAlloc.allocation_id 
-        ? { 
-            ...alloc, 
-            request_id: parseInt(formData.request_id) || 0,
-            center: formData.center,
-            quantity: parseInt(formData.quantity) || 0
-          } 
-        : alloc
-    ));
-    setIsEditOpen(false);
-    setCurrentAlloc(null);
-  };
+  async function fetchAllocations() {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('v_allocations')
+        .select('*')
+        .order('date', { ascending: false });
 
-  const handleDelete = (id: number) => {
-    if (confirm("Are you sure you want to delete this allocation?")) {
-      setAllocations(allocations.filter(alloc => alloc.allocation_id !== id));
+      if (error) throw error;
+      setAllocations(data || []);
+    } catch (error) {
+      console.log(JSON.stringify(error, null, 2));
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  const openEdit = (alloc: any) => {
-    setCurrentAlloc(alloc);
-    setFormData({
-      request_id: alloc.request_id.toString(),
-      center: alloc.center,
-      quantity: alloc.quantity.toString()
-    });
-    setIsEditOpen(true);
+  async function fetchMetadata() {
+    try {
+      const { data: requestsData } = await supabase.from('v_pending_requests').select('*');
+      const { data: centersData } = await supabase.from('v_lookup_centers_with_stock').select('*');
+        
+      setPendingRequests(requestsData || []);
+      setCenters(centersData || []);
+    } catch (error) {
+      console.log(JSON.stringify(error, null, 2));
+    }
+  }
+
+  const handleAuthorize = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    
+    try {
+      const { error } = await supabase.rpc('fn_process_allocation', {
+        p_request_id: parseInt(formData.request_id),
+        p_center_id: parseInt(formData.center_id),
+        p_quantity: parseInt(formData.quantity)
+      });
+
+      if (error) throw error;
+
+      await fetchAllocations();
+      setIsAddOpen(false);
+      setFormData({ request_id: "", center_id: "", quantity: "" });
+    } catch (error) {
+      console.log(JSON.stringify(error, null, 2));
+      const message = error instanceof Error ? error.message : "Failed to authorize allocation";
+      alert(message + ". Note: Allocation will fail if center stock buffer is breached.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -104,42 +123,57 @@ export default function AllocationsPage() {
         </div>
         
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90 shadow-md" />}>
+          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90 shadow-md font-bold" />}>
             <PlusCircle className="w-4 h-4" /> Create New Allocation
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>New Resource Allocation</DialogTitle>
+              <DialogTitle className="text-2xl font-bold tracking-tight">New Resource Allocation</DialogTitle>
               <DialogDescription>
                 Allocate stock from a relief center to a specific ground request.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleAdd}>
+            <form onSubmit={handleAuthorize}>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="request_id" className="flex items-center gap-2">
-                    <Hash className="w-4 h-4 text-muted-foreground" /> Request ID
+                    <Hash className="w-4 h-4 text-muted-foreground" /> Select Request
                   </Label>
-                  <Input 
-                    id="request_id" 
-                    type="number" 
-                    placeholder="e.g. 102" 
-                    value={formData.request_id}
-                    onChange={(e) => setFormData({...formData, request_id: e.target.value})}
-                    required 
-                  />
+                  <Select 
+                    value={formData.request_id} 
+                    onValueChange={(val) => setFormData({...formData, request_id: val ?? ""})}
+                  >
+                    <SelectTrigger id="request_id" className="bg-muted/30">
+                      <SelectValue placeholder="Identify Request" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pendingRequests.map((req) => (
+                        <SelectItem key={req.request_id} value={req.request_id.toString()}>
+                          #{req.request_id} - {req.area} ({req.resource})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="center" className="flex items-center gap-2">
+                  <Label htmlFor="center_id" className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-muted-foreground" /> Relief Center Source
                   </Label>
-                  <Input 
-                    id="center" 
-                    placeholder="e.g. South Central Hub" 
-                    value={formData.center}
-                    onChange={(e) => setFormData({...formData, center: e.target.value})}
-                    required 
-                  />
+                  <Select 
+                    value={formData.center_id} 
+                    onValueChange={(val) => setFormData({...formData, center_id: val ?? ""})}
+                  >
+                    <SelectTrigger id="center_id" className="bg-muted/30">
+                      <SelectValue placeholder="Choose Hub" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {centers.map((center) => (
+                        <SelectItem key={center.id} value={center.id.toString()}>
+                          {center.name} (Stock: {center.dispatchable_quantity})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="quantity" className="flex items-center gap-2">
@@ -148,14 +182,19 @@ export default function AllocationsPage() {
                   <Input 
                     id="quantity" 
                     type="number" 
+                    placeholder="e.g. 100"
                     value={formData.quantity}
                     onChange={(e) => setFormData({...formData, quantity: e.target.value})}
                     required 
+                    className="bg-muted/30 font-medium"
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" className="w-full">Authorize Allocation</Button>
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 font-bold" disabled={submitting}>
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Authorize Allocation
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -164,7 +203,7 @@ export default function AllocationsPage() {
 
       <Card className="border-none shadow-md overflow-hidden">
         <CardHeader className="bg-muted/30 pb-4 border-b">
-          <CardTitle className="text-xl flex items-center gap-2">
+          <CardTitle className="text-xl flex items-center gap-2 font-bold">
             <PackageMinus className="w-5 h-5 text-primary" />
             Allocation Log
           </CardTitle>
@@ -173,103 +212,74 @@ export default function AllocationsPage() {
           <Table>
             <TableHeader className="bg-muted/10 font-bold">
               <TableRow>
-                <TableHead className="pl-6 font-bold w-32">Alloc ID</TableHead>
-                <TableHead className="font-bold">Request ID</TableHead>
-                <TableHead className="font-bold">Source Center</TableHead>
-                <TableHead className="font-bold">Quantity</TableHead>
-                <TableHead className="font-bold">Allocation Date</TableHead>
-                <TableHead className="text-right pr-6 font-bold">Actions</TableHead>
+                <TableHead className="pl-6 w-32 font-bold">Alloc ID</TableHead>
+                <TableHead className="font-bold">Requirement</TableHead>
+                <TableHead className="font-bold">Fulfillment Source</TableHead>
+                <TableHead className="font-bold text-center">Allocated Qty</TableHead>
+                <TableHead className="font-bold text-right pr-6">Date Authorized</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {allocations.map((alloc) => (
-                <TableRow key={alloc.allocation_id} className="hover:bg-muted/5 transition-colors">
-                  <TableCell className="pl-6 font-semibold text-primary">#{alloc.allocation_id}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="gap-1.5 font-medium">
-                      <Hash className="w-3 h-3" /> Req #{alloc.request_id}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-medium">{alloc.center}</TableCell>
-                  <TableCell className="font-bold text-base">{alloc.quantity.toLocaleString()}</TableCell>
-                  <TableCell className="text-muted-foreground flex items-center gap-2 py-4">
-                    <Calendar className="w-3.5 h-3.5" /> {alloc.date}
-                  </TableCell>
-                  <TableCell className="text-right pr-6">
-                    <div className="flex justify-end items-center gap-1">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" />}>
-                            <MoreVertical className="w-4 h-4" />
-                          </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(alloc)} className="gap-2 cursor-pointer">
-                            <Edit className="w-4 h-4" /> Edit Allocation
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDelete(alloc.allocation_id)} 
-                            className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" /> Delete Record
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 gap-1.5 h-8">
-                        <CheckCircle2 className="w-4 h-4" /> Verified
-                      </Button>
-                    </div>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
+                    Loading Allocations...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : allocations.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground italic">
+                    No resource allocations authorized yet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                allocations.map((alloc) => (
+                  <TableRow key={alloc.allocation_id} className="hover:bg-muted/5 transition-colors">
+                    <TableCell className="pl-6 font-semibold text-primary">#{alloc.allocation_id}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="gap-1.5 font-medium border-primary/20 bg-primary/5 text-primary">
+                            <Hash className="w-3 h-3" /> Req #{alloc.request_id}
+                          </Badge>
+                          <span className="font-bold text-sm">{alloc.resource}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground ml-1">For {alloc.requested_by}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        {alloc.source_center}
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-bold text-base text-green-700 text-center">
+                      {alloc.quantity?.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right pr-6">
+                      <div className="flex items-center justify-end gap-2 text-muted-foreground italic">
+                        <Calendar className="w-3.5 h-3.5" /> 
+                        {alloc.date ? new Date(alloc.date).toLocaleDateString() : 'N/A'}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Modify Allocation Entry</DialogTitle>
-            <DialogDescription>
-              Update allocation details for Allocation ID #{currentAlloc?.allocation_id}.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEdit}>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-request_id">Request ID</Label>
-                <Input 
-                  id="edit-request_id" 
-                  value={formData.request_id}
-                  onChange={(e) => setFormData({...formData, request_id: e.target.value})}
-                  required 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-center">Source Center</Label>
-                <Input 
-                  id="edit-center" 
-                  value={formData.center}
-                  onChange={(e) => setFormData({...formData, center: e.target.value})}
-                  required 
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-quantity">Quantity Allocated</Label>
-                <Input 
-                  id="edit-quantity" 
-                  type="number" 
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-                  required 
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="submit" className="w-full">Update Allocation</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      
+      {!loading && allocations.length > 0 && (
+        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5" />
+          <div className="text-sm text-blue-700">
+            <p className="font-semibold">Allocation Processing Information</p>
+            <p className="mt-0.5">These records represent authorized resource movements. Once allocated, items are subtracted from center inventory and earmarked for dispatch.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

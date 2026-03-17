@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Eye, Edit, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { PlusCircle, Eye, Edit, Trash2, AlertTriangle, Loader2, Activity } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,7 @@ interface Disaster {
   disaster_type: string;
   severity_level: string;
   start_date: string;
-  location: string;
+  location: string; // Enriched from v_disasters (first affected area)
 }
 
 export default function DisastersPage() {
@@ -36,7 +36,6 @@ export default function DisastersPage() {
 
   const [newDisaster, setNewDisaster] = useState({
     type: "",
-    location: "",
     severity: "Medium",
     date: new Date().toISOString().split('T')[0],
   });
@@ -51,7 +50,7 @@ export default function DisastersPage() {
       const { data, error } = await supabase
         .from('v_disasters')
         .select('*')
-        .order('disaster_id', { ascending: true });
+        .order('start_date', { ascending: false });
 
       if (error) throw error;
       setDisasters(data || []);
@@ -66,16 +65,12 @@ export default function DisastersPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('disaster')
-        .insert([
-          {
-            disaster_type: newDisaster.type,
-            severity_level: newDisaster.severity,
-            start_date: newDisaster.date,
-            location: newDisaster.location
-          }
-        ]);
+      // Calling fn_add_disaster(p_disaster_type, p_severity_level, p_start_date)
+      const { error } = await supabase.rpc('fn_add_disaster', {
+        p_disaster_type: newDisaster.type,
+        p_severity_level: newDisaster.severity,
+        p_start_date: newDisaster.date
+      });
 
       if (error) throw error;
 
@@ -83,12 +78,12 @@ export default function DisastersPage() {
       setIsDialogOpen(false);
       setNewDisaster({
         type: "",
-        location: "",
         severity: "Medium",
         date: new Date().toISOString().split('T')[0],
       });
     } catch (error) {
-      console.error("FULL ERROR:", JSON.stringify(error, null, 2));
+      console.error("Error adding disaster via RPC:", error);
+      alert("Failed to register disaster. Please check database connectivity.");
     } finally {
       setSubmitting(false);
     }
@@ -98,81 +93,75 @@ export default function DisastersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Disaster Management</h1>
-          <p className="text-muted-foreground mt-1">Monitor and record disaster events.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">Disaster Management Hub</h1>
+          <p className="text-muted-foreground mt-1 text-sm font-medium italic">Command center for disaster registration and event monitoring.</p>
         </div>
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90" />}>
-            <PlusCircle className="w-4 h-4" /> Add Disaster
+          <DialogTrigger render={<Button className="gap-2 bg-primary hover:bg-primary/90 font-bold shadow-lg" />}>
+            <PlusCircle className="w-4 h-4" /> Register New Disaster
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Register New Disaster</DialogTitle>
-              <DialogDescription>
-                Submit details for a new disaster event to trigger response protocols.
+            <DialogHeader className="border-b pb-4">
+              <DialogTitle className="text-2xl font-bold tracking-tight">Declare Emergency Event</DialogTitle>
+              <DialogDescription className="font-medium">
+                Once registered, proceed to 'Affected Areas' to link geographies to this event.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddDisaster}>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="type">Disaster Type</Label>
+                  <Label htmlFor="type" className="font-bold flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-primary" /> Incident Type
+                  </Label>
                   <Input 
                     id="type" 
-                    placeholder="e.g. Flood, Wildfire" 
+                    placeholder="e.g. Flash Flood, Cyclone Nivar" 
                     value={newDisaster.type}
                     onChange={(e) => setNewDisaster({...newDisaster, type: e.target.value})}
                     required 
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="location">Primary Location</Label>
-                  <Input 
-                    id="location" 
-                    placeholder="e.g. North Province" 
-                    value={newDisaster.location}
-                    onChange={(e) => setNewDisaster({...newDisaster, location: e.target.value})}
-                    required 
+                    className="bg-muted/30 font-semibold"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="severity">Severity Level</Label>
+                    <Label htmlFor="severity" className="font-bold">Severity Level</Label>
                     <Select 
                       value={newDisaster.severity} 
                       onValueChange={(val) => setNewDisaster({...newDisaster, severity: val ?? "Medium"})}
                     >
-                      <SelectTrigger id="severity">
+                      <SelectTrigger id="severity" className="bg-muted/30 font-semibold">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Critical">Critical</SelectItem>
+                        <SelectItem value="Medium" className="font-medium text-blue-600">Medium</SelectItem>
+                        <SelectItem value="High" className="font-medium text-orange-600">High</SelectItem>
+                        <SelectItem value="Critical" className="font-medium text-red-600">Critical</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="date">Start Date</Label>
+                    <Label htmlFor="date" className="font-bold">Onset Date</Label>
                     <Input 
                       id="date" 
                       type="date" 
                       value={newDisaster.date}
                       onChange={(e) => setNewDisaster({...newDisaster, date: e.target.value})}
                       required 
+                      className="bg-muted/30 font-semibold"
                     />
                   </div>
                 </div>
               </div>
-              <DialogFooter>
-                <Button type="submit" className="w-full" disabled={submitting}>
+              <DialogFooter className="bg-muted/20 p-4 -mx-6 -mb-6 border-t">
+                <Button type="submit" className="w-full font-bold h-11" disabled={submitting}>
                   {submitting ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Registering...
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Initializing Response...
                     </>
                   ) : (
-                    "Register Event"
+                    "Initialize Emergency Protocol"
                   )}
                 </Button>
               </DialogFooter>
@@ -181,63 +170,69 @@ export default function DisastersPage() {
         </Dialog>
       </div>
 
-      <Card className="border-none shadow-md overflow-hidden">
-        <CardHeader className="bg-muted/30 pb-4">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-orange-500" />
-            Active Disasters
+      <Card className="border-none shadow-xl overflow-hidden rounded-2xl border-t-4 border-t-primary">
+        <CardHeader className="bg-muted/30 pb-4 border-b">
+          <CardTitle className="text-xl flex items-center gap-2 font-bold uppercase tracking-wider text-primary">
+            <AlertTriangle className="w-5 h-5 text-red-500 fill-red-500/10" />
+            Active Incident Repository
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader className="bg-muted/10">
-              <TableRow>
-                <TableHead className="pl-6 w-20">ID</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Severity</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead className="text-right pr-6">Actions</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-6 w-24 font-bold text-xs uppercase tracking-tighter">Event ID</TableHead>
+                <TableHead className="font-bold text-xs uppercase tracking-tighter">Type / Description</TableHead>
+                <TableHead className="font-bold text-xs uppercase tracking-tighter">Primary Heatmap</TableHead>
+                <TableHead className="font-bold text-xs uppercase tracking-tighter">Severity</TableHead>
+                <TableHead className="font-bold text-xs uppercase tracking-tighter">Timestamp</TableHead>
+                <TableHead className="text-right pr-6 font-bold text-xs uppercase tracking-tighter">Control</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center">
-                    <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      <p>Loading disasters...</p>
+                  <TableCell colSpan={6} className="h-48 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                      <Loader2 className="h-10 w-10 animate-spin text-primary opacity-50" />
+                      <p className="font-mono text-sm tracking-widest uppercase">Synchronizing with Cloud Views...</p>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : disasters.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                    No disasters found. Register one to get started.
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground italic font-medium">
+                    No incident records detected in v_disasters ledger.
                   </TableCell>
                 </TableRow>
               ) : (
                 disasters.map((disaster) => (
-                  <TableRow key={disaster.disaster_id} className="hover:bg-muted/5 transition-colors">
-                    <TableCell className="pl-6 font-semibold text-muted-foreground">#{disaster.disaster_id}</TableCell>
-                    <TableCell className="font-medium">{disaster.disaster_type}</TableCell>
-                    <TableCell>{disaster.location}</TableCell>
+                  <TableRow key={disaster.disaster_id} className="hover:bg-muted/5 transition-all group border-b last:border-0">
+                    <TableCell className="pl-6 font-bold text-muted-foreground font-mono">
+                      <Badge variant="outline" className="text-[10px] bg-muted/20">#{disaster.disaster_id}</Badge>
+                    </TableCell>
+                    <TableCell className="font-extrabold text-slate-800">{disaster.disaster_type}</TableCell>
+                    <TableCell className="font-semibold text-slate-600">
+                      {disaster.location || <span className="text-muted-foreground italic opacity-50">No areas linked</span>}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={
                         disaster.severity_level === "Critical" ? "destructive" :
                         disaster.severity_level === "High" ? "outline" :
                         "secondary"
-                      } className={
-                        disaster.severity_level === "High" ? "border-orange-500 text-orange-600" : ""
-                      }>
+                      } className={`font-black px-2 py-0.5 rounded-sm ${
+                        disaster.severity_level === "High" ? "border-orange-500 text-orange-600 bg-orange-50" : ""
+                      }`}>
                         {disaster.severity_level}
                       </Badge>
                     </TableCell>
-                    <TableCell>{disaster.start_date}</TableCell>
+                    <TableCell className="font-medium tabular-nums text-slate-500">
+                      {new Date(disaster.start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </TableCell>
                     <TableCell className="text-right pr-6">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary"><Eye className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary"><Edit className="w-4 h-4" /></Button>
+                      <div className="flex justify-end gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary hover:bg-primary/10"><Eye className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary hover:bg-primary/10"><Edit className="w-4 h-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4" /></Button>
                       </div>
                     </TableCell>
