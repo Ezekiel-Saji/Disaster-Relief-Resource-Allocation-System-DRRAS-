@@ -84,7 +84,7 @@ export default function DispatchPage() {
       const { data, error } = await supabase
         .from("v_ready_for_dispatch")
         .select("*");
-      
+
       if (error) throw error;
       setReadyAllocations(data || []);
     } catch (error) {
@@ -152,9 +152,9 @@ export default function DispatchPage() {
                   <Label htmlFor="allocation_id" className="flex items-center gap-2">
                     <Hash className="w-4 h-4 text-muted-foreground" /> Ready Allocation
                   </Label>
-                  <Select 
-                    value={formData.allocation_id} 
-                    onValueChange={(val) => setFormData({...formData, allocation_id: val ?? ""})}
+                  <Select
+                    value={formData.allocation_id}
+                    onValueChange={(val) => setFormData({ ...formData, allocation_id: val ?? "" })}
                   >
                     <SelectTrigger id="allocation_id" className="bg-muted/30">
                       <SelectValue placeholder="Select Allocation" />
