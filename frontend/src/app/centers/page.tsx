@@ -35,6 +35,7 @@ export default function CentersPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [newCenter, setNewCenter] = useState({
+    name: "",
     location: "",
     storage_capacity: "",
   });
@@ -52,6 +53,16 @@ export default function CentersPage() {
       error.code ? `code: ${error.code}` : undefined,
     ].filter(Boolean);
     return parts.join(" | ");
+  };
+
+  const isMissingColumnError = (error: any, column: string) => {
+    if (!error) return false;
+    const message = String(error.message || "").toLowerCase();
+    return (
+      message.includes(`could not find the '${column}' column`) ||
+      message.includes(`could not find column \"${column}\"`) ||
+      message.includes(`column \"${column}\" does not exist`)
+    );
   };
 
   async function fetchCenters() {
@@ -79,8 +90,7 @@ export default function CentersPage() {
         .from('relief_center') // Base table name from reference
         .insert([
           {
-            // `name` is required by the schema; we mirror it from the location field.
-            name: newCenter.location,
+            name: newCenter.name,
             location: newCenter.location,
             storage_capacity: parseInt(newCenter.storage_capacity) || 0,
           },
@@ -93,6 +103,70 @@ export default function CentersPage() {
       setNewCenter({ location: "", storage_capacity: "" });
     } catch (error: any) {
       console.error("Error adding center:", error);
+
+      // Supabase/PostgREST caches schema metadata. When the schema changes (e.g., a new
+      // column is added), PostgREST may return PGRST204 until the cache is reloaded.
+      // This retry attempt will refresh the schema and retry once.
+      const isSchemaCacheError =
+        error?.code === "PGRST204" ||
+        String(error?.message || "").includes("PGRST204");
+
+      if (isSchemaCacheError) {
+        console.info("Detected schema cache error; reloading PostgREST schema and retrying...");
+        try {
+          await supabase.rpc("postgrest_reload_schema");
+          const { error: retryError } = await supabase
+            .from("relief_center")
+            .insert([
+              {
+                name: newCenter.name,
+                location: newCenter.location,
+                storage_capacity: parseInt(newCenter.storage_capacity) || 0,
+              },
+            ]);
+
+          if (retryError) throw retryError;
+
+          await fetchCenters();
+          setIsDialogOpen(false);
+          setNewCenter({ location: "", storage_capacity: "" });
+          return;
+        } catch (retryError: any) {
+          console.error("Retry failed after schema reload:", retryError);
+          alert(
+            `Failed to register relief center. ${formatSupabaseError(retryError)}`
+          );
+          return;
+        }
+      }
+
+      if (isMissingColumnError(error, "name")) {
+        console.info("Detected missing 'name' column; retrying insert without it...");
+        try {
+          const { error: retryError } = await supabase
+            .from("relief_center")
+            .insert([
+              {
+                location: newCenter.location,
+                storage_capacity: parseInt(newCenter.storage_capacity) || 0,
+              },
+            ]);
+
+          if (retryError) throw retryError;
+
+          await fetchCenters();
+          setIsDialogOpen(false);
+          setNewCenter({ location: "", storage_capacity: "" });
+          return;
+        } catch (retryError: any) {
+          console.error("Retry failed after missing column fallback:", retryError);
+          alert(
+            `Failed to register relief center. ${formatSupabaseError(retryError)}`
+          );
+          return;
+        }
+      }
+
       alert(
         `Failed to register relief center. ${formatSupabaseError(error)}`
       );
@@ -103,7 +177,7 @@ export default function CentersPage() {
 
   const resetDialogState = () => {
     setSelectedCenter(null);
-    setNewCenter({ location: "", storage_capacity: "" });
+    setNewCenter({ name: "", location: "", storage_capacity: "" });
     setDialogMode("add");
   };
 
@@ -128,7 +202,11 @@ export default function CentersPage() {
 
   const openEditDialog = (center: Center) => {
     setSelectedCenter(center);
-    setNewCenter({ location: center.location, storage_capacity: String(center.storage_capacity) });
+    setNewCenter({
+      name: center.name ?? center.location,
+      location: center.location,
+      storage_capacity: String(center.storage_capacity),
+    });
     setDialogMode("edit");
     setIsDialogOpen(true);
   };
@@ -142,7 +220,7 @@ export default function CentersPage() {
       const { error } = await supabase
         .from('relief_center')
         .update({
-          name: newCenter.location,
+          name: newCenter.name,
           location: newCenter.location,
           storage_capacity: parseInt(newCenter.storage_capacity) || 0,
         })
@@ -154,6 +232,63 @@ export default function CentersPage() {
       setIsDialogOpen(false);
     } catch (error: any) {
       console.error("Error updating center:", error);
+
+      const isSchemaCacheError =
+        error?.code === "PGRST204" ||
+        String(error?.message || "").includes("PGRST204");
+
+      if (isSchemaCacheError) {
+        console.info("Detected schema cache error; reloading PostgREST schema and retrying...");
+        try {
+          await supabase.rpc("postgrest_reload_schema");
+          const { error: retryError } = await supabase
+            .from("relief_center")
+            .update({
+              name: newCenter.name,
+              location: newCenter.location,
+              storage_capacity: parseInt(newCenter.storage_capacity) || 0,
+            })
+            .eq("center_id", selectedCenter.center_id);
+
+          if (retryError) throw retryError;
+
+          await fetchCenters();
+          setIsDialogOpen(false);
+          return;
+        } catch (retryError: any) {
+          console.error("Retry failed after schema reload:", retryError);
+          alert(
+            `Failed to update relief center. ${formatSupabaseError(retryError)}`
+          );
+          return;
+        }
+      }
+
+      if (isMissingColumnError(error, "name")) {
+        console.info("Detected missing 'name' column; retrying update without it...");
+        try {
+          const { error: retryError } = await supabase
+            .from("relief_center")
+            .update({
+              location: newCenter.location,
+              storage_capacity: parseInt(newCenter.storage_capacity) || 0,
+            })
+            .eq("center_id", selectedCenter.center_id);
+
+          if (retryError) throw retryError;
+
+          await fetchCenters();
+          setIsDialogOpen(false);
+          return;
+        } catch (retryError: any) {
+          console.error("Retry failed after missing column fallback:", retryError);
+          alert(
+            `Failed to update relief center. ${formatSupabaseError(retryError)}`
+          );
+          return;
+        }
+      }
+
       alert(
         `Failed to update relief center. ${formatSupabaseError(error)}`
       );
@@ -221,7 +356,7 @@ export default function CentersPage() {
                   <p className="font-semibold text-slate-800">#{selectedCenter?.center_id}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Designation / Location</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Name / Location</p>
                   <p className="font-semibold text-slate-800">{selectedCenter?.name ?? selectedCenter?.location}</p>
                 </div>
                 <div>
@@ -233,8 +368,21 @@ export default function CentersPage() {
               <form onSubmit={dialogMode === "edit" ? handleUpdateCenter : handleAddCenter}>
                 <div className="grid gap-4 py-6">
                   <div className="grid gap-2">
+                    <Label htmlFor="name" className="font-bold flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-primary" /> Hub Name
+                    </Label>
+                    <Input
+                      id="name"
+                      placeholder="e.g. North Logistics Hub"
+                      value={newCenter.name}
+                      onChange={(e) => setNewCenter({ ...newCenter, name: e.target.value })}
+                      required
+                      className="bg-muted/30 font-semibold"
+                    />
+                  </div>
+                  <div className="grid gap-2">
                     <Label htmlFor="location" className="font-bold flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-primary" /> Hub Designation
+                      <MapPin className="w-4 h-4 text-primary" /> Location
                     </Label>
                     <Input
                       id="location"
@@ -350,7 +498,7 @@ export default function CentersPage() {
             <TableHeader className="bg-muted/10">
               <TableRow className="hover:bg-transparent text-xs uppercase font-bold tracking-tight">
                 <TableHead className="pl-6 w-24">Asset ID</TableHead>
-                <TableHead>Hub Designation / Location</TableHead>
+                <TableHead>Hub Name / Location</TableHead>
                 <TableHead>Storage Capacity (Units)</TableHead>
                 <TableHead className="text-right pr-6">Operational Control</TableHead>
               </TableRow>
