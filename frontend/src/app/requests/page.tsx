@@ -100,7 +100,7 @@ export default function RequestsPage() {
       
       // Default priority if available
       if (prioritiesData && prioritiesData.length > 0) {
-        setNewRequest(prev => ({ ...prev, priority_id: prioritiesData.find(p => p.name === 'Medium')?.id.toString() || prioritiesData[0].id.toString() }));
+        setNewRequest(prev => ({ ...prev, priority_id: prioritiesData.find(p => p.name === 'Medium')?.id?.toString() || prioritiesData[0]?.id?.toString() || "" }));
       }
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
@@ -168,7 +168,7 @@ export default function RequestsPage() {
                       <SelectValue placeholder="Select Area" />
                     </SelectTrigger>
                     <SelectContent>
-                      {areas.map((area) => (
+                      {areas.filter(area => area.id != null).map((area) => (
                         <SelectItem key={area.id} value={area.id.toString()}>
                           {area.name}
                         </SelectItem>
@@ -186,7 +186,7 @@ export default function RequestsPage() {
                       <SelectValue placeholder="Select Resource" />
                     </SelectTrigger>
                     <SelectContent>
-                      {resources.map((resource) => (
+                      {resources.filter(resource => resource.id != null).map((resource) => (
                         <SelectItem key={resource.id} value={resource.id.toString()}>
                           {resource.name}
                         </SelectItem>
@@ -217,7 +217,7 @@ export default function RequestsPage() {
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
-                        {priorities.map((p) => (
+                        {priorities.filter(p => p.id != null).map((p) => (
                           <SelectItem key={p.id} value={p.id.toString()}>
                             {p.name}
                           </SelectItem>

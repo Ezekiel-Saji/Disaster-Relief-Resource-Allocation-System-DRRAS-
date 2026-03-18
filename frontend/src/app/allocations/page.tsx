@@ -147,7 +147,7 @@ export default function AllocationsPage() {
                       <SelectValue placeholder="Identify Request" />
                     </SelectTrigger>
                     <SelectContent>
-                      {pendingRequests.map((req) => (
+                      {pendingRequests.filter(req => req.request_id != null).map((req) => (
                         <SelectItem key={req.request_id} value={req.request_id.toString()}>
                           #{req.request_id} - {req.area} ({req.resource})
                         </SelectItem>
@@ -167,7 +167,7 @@ export default function AllocationsPage() {
                       <SelectValue placeholder="Choose Hub" />
                     </SelectTrigger>
                     <SelectContent>
-                      {centers.map((center) => (
+                      {centers.filter(center => center.id != null).map((center) => (
                         <SelectItem key={center.id} value={center.id.toString()}>
                           {center.name} (Stock: {center.dispatchable_quantity})
                         </SelectItem>
