@@ -58,8 +58,8 @@ interface Center {
 }
 
 interface ResourceType {
-  id: number;
-  name: string;
+  resource_id: number;
+  resource_name: string;
 }
 
 export default function InventoryPage() {
@@ -104,7 +104,7 @@ export default function InventoryPage() {
     try {
       const [{ data: centerData }, { data: resourceData }] = await Promise.all([
         supabase.from('v_relief_centers').select('center_id, location'),
-        supabase.from('v_lookup_resources').select('id, name')
+        supabase.from('v_lookup_resources').select('resource_id, resource_name')
       ]);
       setCenters(centerData || []);
       setResources(resourceData || []);
@@ -117,12 +117,25 @@ export default function InventoryPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      console.log("Direct table access required for inventory addition (No RPC defined in tech ref)");
-      alert("Manual insertion to 'inventory' table required. No fn_add_inventory RPC was defined in technical reference.");
+      const { error } = await supabase
+        .from('inventory')
+        .insert([
+          {
+            center_id: parseInt(formData.center_id),
+            resource_id: parseInt(formData.resource_id),
+            available_quantity: parseInt(formData.available) || 0,
+            reserved_buffer_quantity: parseInt(formData.reserved) || 0,
+          }
+        ]);
+
+      if (error) throw error;
+
+      await fetchInventory();
       setIsAddOpen(false);
       setFormData({ center_id: "", resource_id: "", available: "", reserved: "" });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding inventory:", error);
+      alert(`Failed to add inventory entry: ${error?.message || error}`);
     } finally {
       setSubmitting(false);
     }
@@ -133,12 +146,23 @@ export default function InventoryPage() {
     if (!currentItem) return;
     setSubmitting(true);
     try {
-      console.log("Direct table access required for inventory update");
-      alert("Manual update to 'inventory' table required.");
+      const { error } = await supabase
+        .from('inventory')
+        .update({
+          available_quantity: parseInt(formData.available) || 0,
+          reserved_buffer_quantity: parseInt(formData.reserved) || 0,
+        })
+        .eq('center_id', currentItem.center_id)
+        .eq('resource_id', currentItem.resource_id);
+
+      if (error) throw error;
+
+      await fetchInventory();
       setIsEditOpen(false);
       setCurrentItem(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating inventory:", error);
+      alert(`Failed to update inventory: ${error?.message || error}`);
     } finally {
       setSubmitting(false);
     }
@@ -190,7 +214,7 @@ export default function InventoryPage() {
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold tracking-tight">Register New Resource Lot</DialogTitle>
               <DialogDescription>
-                Note: This operation currently uses a mock handler as no RPC is defined in the tech reference for inventory management.
+                Add a new resource stock entry for a specific center and resource type.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAdd}>
@@ -228,8 +252,8 @@ export default function InventoryPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {resources.map((r) => (
-                        <SelectItem key={r.id} value={r.id.toString()}>
-                          {r.name}
+                        <SelectItem key={r.resource_id} value={r.resource_id.toString()}>
+                          {r.resource_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
