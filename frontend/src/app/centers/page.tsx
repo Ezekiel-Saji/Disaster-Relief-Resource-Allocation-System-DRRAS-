@@ -21,7 +21,6 @@ import { supabase } from "@/lib/supabase";
 
 interface Center {
   center_id: number;
-  name?: string;
   location: string;
   storage_capacity: number;
 }
@@ -35,7 +34,6 @@ export default function CentersPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [newCenter, setNewCenter] = useState({
-    name: "",
     location: "",
     storage_capacity: "",
   });
@@ -87,10 +85,9 @@ export default function CentersPage() {
     setSubmitting(true);
     try {
       const { error } = await supabase
-        .from('relief_center') // Base table name from reference
+        .from('relief_center')
         .insert([
           {
-            name: newCenter.name,
             location: newCenter.location,
             storage_capacity: parseInt(newCenter.storage_capacity) || 0,
           },
@@ -119,7 +116,6 @@ export default function CentersPage() {
             .from("relief_center")
             .insert([
               {
-                name: newCenter.name,
                 location: newCenter.location,
                 storage_capacity: parseInt(newCenter.storage_capacity) || 0,
               },
@@ -177,7 +173,7 @@ export default function CentersPage() {
 
   const resetDialogState = () => {
     setSelectedCenter(null);
-    setNewCenter({ name: "", location: "", storage_capacity: "" });
+    setNewCenter({ location: "", storage_capacity: "" });
     setDialogMode("add");
   };
 
@@ -203,7 +199,6 @@ export default function CentersPage() {
   const openEditDialog = (center: Center) => {
     setSelectedCenter(center);
     setNewCenter({
-      name: center.name ?? center.location,
       location: center.location,
       storage_capacity: String(center.storage_capacity),
     });
@@ -220,7 +215,6 @@ export default function CentersPage() {
       const { error } = await supabase
         .from('relief_center')
         .update({
-          name: newCenter.name,
           location: newCenter.location,
           storage_capacity: parseInt(newCenter.storage_capacity) || 0,
         })
@@ -244,7 +238,6 @@ export default function CentersPage() {
           const { error: retryError } = await supabase
             .from("relief_center")
             .update({
-              name: newCenter.name,
               location: newCenter.location,
               storage_capacity: parseInt(newCenter.storage_capacity) || 0,
             })
@@ -356,8 +349,8 @@ export default function CentersPage() {
                   <p className="font-semibold text-slate-800">#{selectedCenter?.center_id}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Name / Location</p>
-                  <p className="font-semibold text-slate-800">{selectedCenter?.name ?? selectedCenter?.location}</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Location</p>
+                  <p className="font-semibold text-slate-800">{selectedCenter?.location}</p>
                 </div>
                 <div>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Storage Capacity</p>
@@ -367,19 +360,6 @@ export default function CentersPage() {
             ) : (
               <form onSubmit={dialogMode === "edit" ? handleUpdateCenter : handleAddCenter}>
                 <div className="grid gap-4 py-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="name" className="font-bold flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-primary" /> Hub Name
-                    </Label>
-                    <Input
-                      id="name"
-                      placeholder="e.g. North Logistics Hub"
-                      value={newCenter.name}
-                      onChange={(e) => setNewCenter({ ...newCenter, name: e.target.value })}
-                      required
-                      className="bg-muted/30 font-semibold"
-                    />
-                  </div>
                   <div className="grid gap-2">
                     <Label htmlFor="location" className="font-bold flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-primary" /> Location
@@ -526,7 +506,7 @@ export default function CentersPage() {
                       <Badge variant="outline" className="text-[10px] bg-muted/20 border-none">#{center.center_id}</Badge>
                     </TableCell>
                     <TableCell className="font-extrabold text-slate-800 tracking-tight">
-                      {center.name ?? center.location}
+                      {center.location}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
