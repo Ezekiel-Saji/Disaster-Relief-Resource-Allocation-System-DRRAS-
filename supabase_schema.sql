@@ -496,8 +496,8 @@ $$;
 -- Creates a dispatch shipment for a completed allocation.
 -- Returns the new dispatch_id.
 CREATE OR REPLACE FUNCTION fn_create_dispatch(
-    p_allocation_id          INT,
-    p_expected_delivery_date DATE
+    p_allocation_id   INT,
+    p_expected_delivery DATE
 )
 RETURNS INT
 LANGUAGE plpgsql AS $$
@@ -541,6 +541,25 @@ BEGIN
         WHERE dr.report_id = v_report_id;
 END;
 $$;
+
+
+-- =============================================================================
+-- MAINTENANCE — Sequence Reset
+-- Run this if records were inserted manually via the Supabase dashboard,
+-- which can cause the SERIAL sequence to fall out of sync and trigger
+-- "duplicate key value violates unique constraint" errors on the next INSERT.
+-- Applied: 2026-03-18
+-- =============================================================================
+
+SELECT setval(pg_get_serial_sequence('disaster',       'disaster_id'),   (SELECT MAX(disaster_id)   FROM disaster));
+SELECT setval(pg_get_serial_sequence('priority_level', 'priority_id'),   (SELECT MAX(priority_id)   FROM priority_level));
+SELECT setval(pg_get_serial_sequence('resource_type',  'resource_id'),   (SELECT MAX(resource_id)   FROM resource_type));
+SELECT setval(pg_get_serial_sequence('area',           'area_id'),       (SELECT MAX(area_id)       FROM area));
+SELECT setval(pg_get_serial_sequence('relief_center',  'center_id'),     (SELECT MAX(center_id)     FROM relief_center));
+SELECT setval(pg_get_serial_sequence('area_request',   'request_id'),    (SELECT MAX(request_id)    FROM area_request));
+SELECT setval(pg_get_serial_sequence('allocation',     'allocation_id'), (SELECT MAX(allocation_id) FROM allocation));
+SELECT setval(pg_get_serial_sequence('dispatch',       'dispatch_id'),   (SELECT MAX(dispatch_id)   FROM dispatch));
+SELECT setval(pg_get_serial_sequence('delivery_report','report_id'),     (SELECT MAX(report_id)     FROM delivery_report));
 
 
 -- =============================================================================
