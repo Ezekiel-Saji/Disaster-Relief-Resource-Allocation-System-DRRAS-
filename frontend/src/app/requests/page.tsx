@@ -94,14 +94,34 @@ export default function RequestsPage() {
       const { data: resourcesData } = await supabase.from('v_lookup_resources').select('*');
       const { data: prioritiesData } = await supabase.from('v_lookup_priorities').select('*');
       
-      setAreas(areasData || []);
-      setResources(resourcesData || []);
-      setPriorities(prioritiesData || []);
+      const uniqueAreas = Array.from(
+        new Map((areasData || []).map(a => [a.area_id, a])).values()
+      );
+      const uniqueResources = Array.from(
+        new Map((resourcesData || []).map(r => [r.resource_id, r])).values()
+      );
+      const uniquePriorities = Array.from(
+        new Map((prioritiesData || []).map(p => [p.priority_id, p])).values()
+      );
+
+      setAreas(uniqueAreas);
+      setResources(uniqueResources);
+      setPriorities(uniquePriorities);
       
       // Default priority if available
+      // if (prioritiesData && prioritiesData.length > 0) {
+      //   setNewRequest(prev => ({ ...prev, priority_id: prioritiesData.find(p => p.name === 'Medium')?.id.toString() || prioritiesData[0].id.toString() }));
+      // }
       if (prioritiesData && prioritiesData.length > 0) {
-        setNewRequest(prev => ({ ...prev, priority_id: prioritiesData.find(p => p.name === 'Medium')?.id.toString() || prioritiesData[0].id.toString() }));
-      }
+        console.log("prioritiesData:", prioritiesData);
+  setNewRequest(prev => ({
+    ...prev,
+    priority_id:
+      prioritiesData.find(p => p.priority_name === "Medium")?.priority_id?.toString() ??
+      prioritiesData[0]?.priority_id?.toString() ??
+      ""
+  }));
+}
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
     }
@@ -164,13 +184,18 @@ export default function RequestsPage() {
                     value={newRequest.area_id} 
                     onValueChange={(val) => setNewRequest({...newRequest, area_id: val || ""})}
                   >
+                 
                     <SelectTrigger id="area" className="bg-muted/30">
                       <SelectValue placeholder="Select Area" />
                     </SelectTrigger>
                     <SelectContent>
+                     
                       {areas.map((area) => (
-                        <SelectItem key={area.id} value={area.id.toString()}>
-                          {area.name}
+                        <SelectItem
+                          key={area.area_id}
+                          value={area.area_id?.toString() ?? ""}
+                        >
+                          {area.area_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -187,8 +212,8 @@ export default function RequestsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {resources.map((resource) => (
-                        <SelectItem key={resource.id} value={resource.id.toString()}>
-                          {resource.name}
+                        <SelectItem key={resource.resource_id} value={resource.resource_id?.toString() ?? ""}>
+                          {resource.resource_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -218,8 +243,8 @@ export default function RequestsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {priorities.map((p) => (
-                          <SelectItem key={p.id} value={p.id.toString()}>
-                            {p.name}
+                          <SelectItem key={p.priority_id} value={p.priority_id?.toString() ?? ""}>
+                            {p.priority_name}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -82,8 +82,17 @@ export default function AllocationsPage() {
       const { data: requestsData } = await supabase.from('v_pending_requests').select('*');
       const { data: centersData } = await supabase.from('v_lookup_centers_with_stock').select('*');
         
-      setPendingRequests(requestsData || []);
-      setCenters(centersData || []);
+      // Deduplicate requests by request_id just in case the view returns duplicates due to joins
+      const uniqueRequests = Array.from(
+        new Map((requestsData || []).map(req => [req.request_id, req])).values()
+      );
+
+      const uniqueCenters = Array.from(
+        new Map((centersData || []).map(c => [c.center_id, c])).values()
+      );
+
+      setPendingRequests(uniqueRequests);
+      setCenters(uniqueCenters);
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
     }
@@ -148,7 +157,7 @@ export default function AllocationsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {pendingRequests.map((req) => (
-                        <SelectItem key={req.request_id} value={req.request_id.toString()}>
+                        <SelectItem key={req.request_id} value={req.request_id?.toString() ?? ""}>
                           #{req.request_id} - {req.area} ({req.resource})
                         </SelectItem>
                       ))}
@@ -168,8 +177,8 @@ export default function AllocationsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {centers.map((center) => (
-                        <SelectItem key={center.id} value={center.id.toString()}>
-                          {center.name} (Stock: {center.dispatchable_quantity})
+                        <SelectItem key={center.center_id} value={center.center_id?.toString() ?? ""}>
+                          {center.location} (Stock: {center.dispatchable_quantity})
                         </SelectItem>
                       ))}
                     </SelectContent>

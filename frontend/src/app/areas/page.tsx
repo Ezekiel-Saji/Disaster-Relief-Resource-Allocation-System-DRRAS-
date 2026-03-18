@@ -34,8 +34,8 @@ interface AffectedArea {
 }
 
 interface LookupArea {
-  id: number;
-  name: string;
+  area_id: number;
+  area_name: string;
 }
 
 interface LookupDisaster {
@@ -83,7 +83,7 @@ export default function AreasPage() {
   async function fetchMetadata() {
     try {
       const [{ data: areaData }, { data: disasterData }] = await Promise.all([
-        supabase.from('v_lookup_areas').select('id, name'),
+        supabase.from('v_lookup_areas').select('area_id, area_name'),
         supabase.from('v_disasters').select('disaster_id, disaster_type, location')
       ]);
       setLookupAreas(areaData || []);
@@ -147,14 +147,14 @@ export default function AreasPage() {
                   </Label>
                   <Select 
                     value={formData.area_id} 
-                    onValueChange={(val) => setFormData({...formData, area_id: val})}
+                    onValueChange={(val) => setFormData({...formData, area_id: val || ""})}
                   >
                     <SelectTrigger id="area" className="bg-muted/30 font-semibold">
                       <SelectValue placeholder="Select Area" />
                     </SelectTrigger>
                     <SelectContent>
                       {lookupAreas.map((a) => (
-                        <SelectItem key={a.id} value={a.id.toString()}>{a.name}</SelectItem>
+                        <SelectItem key={a.area_id} value={a.area_id?.toString() ?? ""}>{a.area_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -165,14 +165,14 @@ export default function AreasPage() {
                   </Label>
                   <Select 
                     value={formData.disaster_id} 
-                    onValueChange={(val) => setFormData({...formData, disaster_id: val})}
+                    onValueChange={(val) => setFormData({...formData, disaster_id: val || ""})}
                   >
                     <SelectTrigger id="disaster" className="bg-muted/30 font-semibold">
                       <SelectValue placeholder="Select Disaster" />
                     </SelectTrigger>
                     <SelectContent>
                       {lookupDisasters.map((d) => (
-                        <SelectItem key={d.disaster_id} value={d.disaster_id.toString()}>
+                        <SelectItem key={d.disaster_id} value={d.disaster_id ?.toString() ?? ""}>
                           {d.disaster_type} ({d.location})
                         </SelectItem>
                       ))}

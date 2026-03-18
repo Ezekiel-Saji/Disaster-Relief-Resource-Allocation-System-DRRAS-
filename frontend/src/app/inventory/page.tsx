@@ -58,8 +58,8 @@ interface Center {
 }
 
 interface ResourceType {
-  id: number;
-  name: string;
+  resource_id: number;
+  resource_name: string;
 }
 
 export default function InventoryPage() {
@@ -104,10 +104,10 @@ export default function InventoryPage() {
     try {
       const [{ data: centerData }, { data: resourceData }] = await Promise.all([
         supabase.from('v_relief_centers').select('center_id, location'),
-        supabase.from('v_lookup_resources').select('id, name')
+        supabase.from('v_lookup_resources').select('resource_id, resource_name')
       ]);
       setCenters(centerData || []);
-      setResources(resourceData || []);
+      setResources(resourceData || []); 
     } catch (error) {
       console.error('Error fetching metadata:', error);
     }
@@ -228,8 +228,8 @@ export default function InventoryPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {resources.map((r) => (
-                        <SelectItem key={r.id} value={r.id.toString()}>
-                          {r.name}
+                        <SelectItem key={r.resource_id} value={r.resource_id?.toString() ?? ""}>
+                          {r.resource_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
