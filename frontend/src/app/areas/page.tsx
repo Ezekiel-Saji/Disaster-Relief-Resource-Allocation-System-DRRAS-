@@ -34,8 +34,8 @@ interface AffectedArea {
 }
 
 interface LookupArea {
-  id: number;
-  name: string;
+  area_id: number;
+  area_name: string;
 }
 
 interface LookupDisaster {
@@ -83,7 +83,7 @@ export default function AreasPage() {
   async function fetchMetadata() {
     try {
       const [{ data: areaData }, { data: disasterData }] = await Promise.all([
-        supabase.from('v_lookup_areas').select('id, name'),
+        supabase.from('v_lookup_areas').select('area_id, area_name'),
         supabase.from('v_disasters').select('disaster_id, disaster_type, location')
       ]);
       setLookupAreas(areaData || []);
@@ -154,7 +154,7 @@ export default function AreasPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {lookupAreas.map((a) => (
-                        <SelectItem key={a.id} value={a.id.toString()}>{a.name}</SelectItem>
+                        <SelectItem key={a.area_id} value={a.area_id.toString()}>{a.area_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
