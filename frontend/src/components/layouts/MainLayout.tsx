@@ -5,8 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 import { Sidebar } from "@/components/layouts/Sidebar";
 import { TopNav } from "@/components/layouts/TopNav";
 import { usePathname } from "next/navigation";
-import { Bell, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import {
   InAppNotification,
   NOTIFICATION_EVENT,
@@ -122,6 +120,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [globalEmergencyAlert, setGlobalEmergencyAlert] =
+    useState<InAppNotification | null>(null);
   const suggestions = PAGE_SUGGESTIONS[pathname] ?? [];
   const pageNotifications = notifications.filter(
     (notification) => notification.page === pathname
@@ -137,6 +137,63 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           type: suggestion.type,
           source: "guidance" as const,
         }));
+  const activeNotification =
+    globalEmergencyAlert ?? (isNotificationOpen ? combinedNotifications[0] ?? null : null);
+
+  const createGlobalEmergencyAlert = async (): Promise<InAppNotification | null> => {
+    try {
+      const { data, error } = await supabase
+        .from("v_area_requests")
+        .select("request_id, area, resource, urgency, status, date")
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      const priorityRank: Record<string, number> = {
+        Critical: 4,
+        High: 3,
+        Medium: 2,
+        Low: 1,
+      };
+
+      const outstandingRequests =
+        data?.filter((request) =>
+          ["Pending", "Approved"].includes(request.status)
+        ) ?? [];
+
+      if (outstandingRequests.length === 0) {
+        return null;
+      }
+
+      const highestPriorityRequest = outstandingRequests.sort((left, right) => {
+        const priorityDelta =
+          (priorityRank[right.urgency] ?? 0) - (priorityRank[left.urgency] ?? 0);
+
+        if (priorityDelta !== 0) {
+          return priorityDelta;
+        }
+
+        return new Date(right.date).getTime() - new Date(left.date).getTime();
+      })[0];
+
+      const isUrgent =
+        highestPriorityRequest.urgency === "Critical" ||
+        highestPriorityRequest.urgency === "High";
+
+      return {
+        id: "global-emergency-alert",
+        page: "/requests",
+        title: "Emergency Alert",
+        message: `Request #${highestPriorityRequest.request_id} from ${highestPriorityRequest.area} for ${highestPriorityRequest.resource} is awaiting allocation.`,
+        type: "Alert",
+        source: "reminder",
+        urgent: isUrgent,
+      };
+    } catch (error) {
+      console.error("Error creating global emergency alert:", error);
+      return null;
+    }
+  };
 
   const createPageReminder = async (
     currentPath: string
@@ -145,7 +202,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       if (currentPath === "/requests") {
         const { data, error } = await supabase
           .from("v_area_requests")
-          .select("request_id, area, resource, status, date")
+          .select("request_id, area, resource, urgency, status, date")
           .order("date", { ascending: false });
 
         if (error) throw error;
@@ -156,10 +213,14 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         if (pendingRequest) {
           return {
             page: currentPath,
-            title: "Pending Requests Require Review",
+            title:
+              pendingRequest.urgency === "Critical"
+                ? "Critical Request Requires Immediate Allocation"
+                : "Pending Requests Require Review",
             message: `Request #${pendingRequest.request_id} from ${pendingRequest.area} for ${pendingRequest.resource} is awaiting allocation action.`,
             type: "Request",
             source: "reminder",
+            urgent: pendingRequest.urgency === "Critical",
           };
         }
       }
@@ -303,6 +364,24 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     };
   }, [pathname]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncGlobalEmergencyAlert = async () => {
+      const alert = await createGlobalEmergencyAlert();
+
+      if (cancelled) return;
+
+      setGlobalEmergencyAlert(alert);
+    };
+
+    void syncGlobalEmergencyAlert();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -321,53 +400,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-muted/30">
       <Sidebar />
       <div className="relative flex-1 flex flex-col min-w-0">
-        <TopNav />
+        <TopNav
+          activeNotification={activeNotification}
+        />
         <main className="flex-1 p-6 overflow-y-auto">
           {children}
         </main>
-        {isNotificationOpen && combinedNotifications.length > 0 ? (
-          <div className="pointer-events-none fixed right-6 top-24 z-50 w-[min(420px,calc(100vw-2rem))]">
-            <div className="pointer-events-auto rounded-2xl border border-border/70 bg-background/95 shadow-2xl backdrop-blur-sm">
-              <div className="flex items-start justify-between gap-4 border-b border-border/60 px-4 py-3">
-                <div className="flex items-center gap-2 text-primary">
-                  <Bell className="h-5 w-5" />
-                  <div>
-                    <p className="text-sm font-bold text-foreground">Notifications</p>
-                    <p className="text-xs text-muted-foreground">
-                      Operational updates and pending attention items.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  aria-label="Close notifications"
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  onClick={() => setIsNotificationOpen(false)}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="space-y-3 px-4 py-4">
-                {combinedNotifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className="rounded-xl border border-border bg-muted/15 px-4 py-3"
-                  >
-                    <div className="mb-2 flex items-center gap-2">
-                      <p className="text-sm font-semibold text-foreground">
-                        {notification.title}
-                      </p>
-                      <Badge variant="outline">{notification.type}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {notification.message}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
     </div>
   );
