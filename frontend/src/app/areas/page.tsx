@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/lib/supabase";
 
 interface AffectedArea {
-  affected_id: number;
+  affected_id: string;
   area_name: string;
   district: string;
   state: string;
@@ -34,25 +34,18 @@ interface AffectedArea {
 }
 
 interface AffectedAreaRow {
-  affected_id: number;
   severity_score: number;
   last_assistance_date: string | null;
   area_id: number;
   disaster_id: number;
-  area: {
-    area_name: string;
-    district: string;
-    state: string;
-    population: number;
-  }[] | null;
-  disaster: {
-    disaster_type: string;
-  }[] | null;
 }
 
 interface LookupArea {
   area_id: number;
   area_name: string;
+  district?: string | null;
+  state?: string | null;
+  population?: number | null;
 }
 
 interface LookupDisaster {
@@ -83,43 +76,54 @@ export default function AreasPage() {
   async function fetchAreas() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("affected_area")
-        .select(`
-          affected_id,
-          severity_score,
-          last_assistance_date,
-          area_id,
-          disaster_id,
-          area:area_id (
-            area_name,
-            district,
-            state,
-            population
-          ),
-          disaster:disaster_id (
-            disaster_type
-          )
-        `)
-        .order('severity_score', { ascending: false });
+      const [
+        { data: affectedData, error: affectedError },
+        { data: areaData, error: areaError },
+        { data: disasterData, error: disasterError },
+      ] = await Promise.all([
+        supabase
+          .from("affected_area")
+          .select("severity_score, last_assistance_date, area_id, disaster_id")
+          .order("severity_score", { ascending: false }),
+        supabase
+          .from("area")
+          .select("area_id, area_name, district, state, population"),
+        supabase
+          .from("disaster")
+          .select("disaster_id, disaster_type"),
+      ]);
 
-      if (error) throw error;
-      const normalizedAreas = ((data as AffectedAreaRow[] | null) || []).map((row) => {
-        const area = row.area?.[0];
-        const disaster = row.disaster?.[0];
+      if (affectedError) throw affectedError;
+      if (areaError) throw areaError;
+      if (disasterError) throw disasterError;
+
+      const areaMap = new Map(
+        ((areaData as LookupArea[] | null) || []).map((area) => [area.area_id, area])
+      );
+      const disasterMap = new Map(
+        ((disasterData as LookupDisaster[] | null) || []).map((disaster) => [
+          disaster.disaster_id,
+          disaster,
+        ])
+      );
+
+      const normalizedAreas = ((affectedData as AffectedAreaRow[] | null) || []).map((row) => {
+        const area = areaMap.get(row.area_id);
+        const disaster = disasterMap.get(row.disaster_id);
 
         return {
-        affected_id: row.affected_id,
-        area_name: area?.area_name ?? "Unknown Area",
-        district: area?.district ?? "Unknown District",
-        state: area?.state ?? "Unknown State",
-        disaster: disaster?.disaster_type ?? "Unknown Disaster",
-        population: area?.population ?? 0,
-        severity_score: row.severity_score,
-        last_assistance: row.last_assistance_date,
-        disaster_id: row.disaster_id,
-        area_id: row.area_id,
-      }});
+          affected_id: `${row.area_id}-${row.disaster_id}`,
+          area_name: area?.area_name ?? "Unknown Area",
+          district: area?.district ?? "Unknown District",
+          state: area?.state ?? "Unknown State",
+          disaster: disaster?.disaster_type ?? "Unknown Disaster",
+          population: area?.population ?? 0,
+          severity_score: row.severity_score,
+          last_assistance: row.last_assistance_date,
+          disaster_id: row.disaster_id,
+          area_id: row.area_id,
+        };
+      });
 
       setAreas(normalizedAreas);
     } catch (error) {
