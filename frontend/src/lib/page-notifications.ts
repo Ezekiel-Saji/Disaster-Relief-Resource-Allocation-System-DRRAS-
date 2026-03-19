@@ -6,6 +6,7 @@ export interface InAppNotification {
   title: string;
   message: string;
   type: "Alert" | "Request" | "Dispatch" | "Delivery" | "Info";
+  source?: "action" | "reminder" | "guidance";
 }
 
 const NOTIFICATION_EVENT = "drras:notify";

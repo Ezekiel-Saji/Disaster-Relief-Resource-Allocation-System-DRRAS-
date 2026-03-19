@@ -5,20 +5,13 @@ import { useAuth } from "@/context/AuthContext";
 import { Sidebar } from "@/components/layouts/Sidebar";
 import { TopNav } from "@/components/layouts/TopNav";
 import { usePathname } from "next/navigation";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Bell, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   InAppNotification,
   NOTIFICATION_EVENT,
 } from "@/lib/page-notifications";
+import { supabase } from "@/lib/supabase";
 
 const PAGE_SUGGESTIONS: Record<
   string,
@@ -142,7 +135,92 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           title: suggestion.title,
           message: suggestion.message,
           type: suggestion.type,
+          source: "guidance" as const,
         }));
+
+  const createPageReminder = async (
+    currentPath: string
+  ): Promise<Omit<InAppNotification, "id"> | null> => {
+    try {
+      if (currentPath === "/requests") {
+        const { data, error } = await supabase
+          .from("v_area_requests")
+          .select("request_id, area, resource, status, date")
+          .order("date", { ascending: false });
+
+        if (error) throw error;
+        const pendingRequest = data?.find((request) =>
+          ["Pending", "Approved"].includes(request.status)
+        );
+
+        if (pendingRequest) {
+          return {
+            page: currentPath,
+            title: "Pending Requests Require Review",
+            message: `Request #${pendingRequest.request_id} from ${pendingRequest.area} for ${pendingRequest.resource} is awaiting allocation action.`,
+            type: "Request",
+            source: "reminder",
+          };
+        }
+      }
+
+      if (currentPath === "/allocations") {
+        const { count, error } = await supabase
+          .from("v_pending_requests")
+          .select("request_id", { count: "exact", head: true });
+
+        if (error) throw error;
+        if ((count || 0) > 0) {
+          return {
+            page: currentPath,
+            title: "Allocations Are Pending",
+            message: `${count} request${count === 1 ? "" : "s"} ${count === 1 ? "is" : "are"} still awaiting resource allocation.`,
+            type: "Alert",
+            source: "reminder",
+          };
+        }
+      }
+
+      if (currentPath === "/dispatch") {
+        const { count, error } = await supabase
+          .from("v_ready_for_dispatch")
+          .select("allocation_id", { count: "exact", head: true });
+
+        if (error) throw error;
+        if ((count || 0) > 0) {
+          return {
+            page: currentPath,
+            title: "Dispatch Creation Is Pending",
+            message: `${count} allocation${count === 1 ? "" : "s"} ${count === 1 ? "is" : "are"} ready for dispatch creation.`,
+            type: "Dispatch",
+            source: "reminder",
+          };
+        }
+      }
+
+      if (currentPath === "/deliveries") {
+        const { count, error } = await supabase
+          .from("v_dispatches")
+          .select("dispatch_id", { count: "exact", head: true })
+          .eq("status", "In Transit");
+
+        if (error) throw error;
+        if ((count || 0) > 0) {
+          return {
+            page: currentPath,
+            title: "Delivery Confirmation Is Pending",
+            message: `${count} dispatch${count === 1 ? "" : "es"} ${count === 1 ? "is" : "are"} still in transit and awaiting delivery confirmation.`,
+            type: "Delivery",
+            source: "reminder",
+          };
+        }
+      }
+    } catch (error) {
+      console.error("Error creating page reminder:", error);
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     const handleNotification = (
@@ -151,6 +229,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       const detail = (event as CustomEvent<Omit<InAppNotification, "id">>).detail;
       const nextNotification: InAppNotification = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        source: detail.source ?? "action",
         ...detail,
       };
 
@@ -186,6 +265,44 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncPageReminder = async () => {
+      const reminder = await createPageReminder(pathname);
+
+      if (cancelled) return;
+
+      setNotifications((current) => {
+        const notificationsForOtherPages = current.filter(
+          (notification) => notification.page !== pathname
+        );
+
+        if (!reminder) {
+          return notificationsForOtherPages;
+        }
+
+        return [
+          {
+            id: `reminder-${pathname}`,
+            ...reminder,
+          },
+          ...notificationsForOtherPages,
+        ].slice(0, 10);
+      });
+
+      if (reminder) {
+        setIsNotificationOpen(true);
+      }
+    };
+
+    void syncPageReminder();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -208,20 +325,30 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-6 overflow-y-auto">
           {children}
         </main>
-        <Dialog open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-primary">
-                <Bell className="h-5 w-5" />
-                Notifications
-              </DialogTitle>
-              <DialogDescription>
-                Operational updates and page-specific guidance.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              {combinedNotifications.length > 0 ? (
-                combinedNotifications.map((notification) => (
+        {isNotificationOpen && combinedNotifications.length > 0 ? (
+          <div className="pointer-events-none fixed right-6 top-24 z-50 w-[min(420px,calc(100vw-2rem))]">
+            <div className="pointer-events-auto rounded-2xl border border-border/70 bg-background/95 shadow-2xl backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-4 border-b border-border/60 px-4 py-3">
+                <div className="flex items-center gap-2 text-primary">
+                  <Bell className="h-5 w-5" />
+                  <div>
+                    <p className="text-sm font-bold text-foreground">Notifications</p>
+                    <p className="text-xs text-muted-foreground">
+                      Operational updates and pending attention items.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close notifications"
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  onClick={() => setIsNotificationOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-3 px-4 py-4">
+                {combinedNotifications.map((notification) => (
                   <div
                     key={notification.id}
                     className="rounded-xl border border-border bg-muted/15 px-4 py-3"
@@ -236,20 +363,11 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                       {notification.message}
                     </p>
                   </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No action notifications or page guidance are available right now.
-                </p>
-              )}
-              <div className="flex justify-end pt-2">
-                <Button onClick={() => setIsNotificationOpen(false)}>
-                  Close
-                </Button>
+                ))}
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
+          </div>
+        ) : null}
       </div>
     </div>
   );
