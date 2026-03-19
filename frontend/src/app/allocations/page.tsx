@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface Allocation {
   allocation_id: number;
@@ -114,6 +115,12 @@ export default function AllocationsPage() {
       await fetchAllocations();
       setIsAddOpen(false);
       setFormData({ request_id: "", center_id: "", quantity: "" });
+      triggerInAppNotification({
+        page: "/allocations",
+        title: "Allocation authorized",
+        message: "Resource allocation has been authorized successfully. Dispatch processing may now proceed.",
+        type: "Info",
+      });
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
       const message = error instanceof Error ? error.message : "Failed to authorize allocation";

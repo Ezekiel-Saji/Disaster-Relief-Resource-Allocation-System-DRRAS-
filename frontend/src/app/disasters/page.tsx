@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface Disaster {
   disaster_id: number;
@@ -33,6 +34,12 @@ export default function DisastersPage() {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Disaster | null>(null);
+  const [deleteDialogTitle, setDeleteDialogTitle] = useState("");
+  const [deleteDialogMessage, setDeleteDialogMessage] = useState("");
+  const [deleteDialogMode, setDeleteDialogMode] = useState<"confirm" | "message">("confirm");
 
   const [newDisaster, setNewDisaster] = useState({
     type: "",
@@ -81,11 +88,69 @@ export default function DisastersPage() {
         severity: "Medium",
         date: new Date().toISOString().split('T')[0],
       });
+      triggerInAppNotification({
+        page: "/disasters",
+        title: "Disaster registered",
+        message: `The disaster "${newDisaster.type}" has been registered successfully. Please associate the relevant affected areas.`,
+        type: "Alert",
+      });
     } catch (error) {
       console.error("Error adding disaster via RPC:", error);
       alert("Failed to register disaster. Please check database connectivity.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openDeleteDialog = (disaster: Disaster) => {
+    setDeleteTarget(disaster);
+    setDeleteDialogMode("confirm");
+    setDeleteDialogTitle("Delete Disaster");
+    setDeleteDialogMessage(
+      `Delete "${disaster.disaster_type}" and its linked affected-area mappings?`
+    );
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = (force = false) => {
+    if (deletingId !== null && !force) return;
+    setDeleteDialogOpen(false);
+    setDeleteTarget(null);
+    setDeleteDialogTitle("");
+    setDeleteDialogMessage("");
+    setDeleteDialogMode("confirm");
+  };
+
+  const handleDeleteDisaster = async () => {
+    if (!deleteTarget) return;
+
+    setDeletingId(deleteTarget.disaster_id);
+    try {
+      const { error } = await supabase
+        .from("disaster")
+        .delete()
+        .eq("disaster_id", deleteTarget.disaster_id);
+
+      if (error) throw error;
+
+      await fetchDisasters();
+      const deletedType = deleteTarget.disaster_type;
+      closeDeleteDialog(true);
+      triggerInAppNotification({
+        page: "/disasters",
+        title: "Disaster deleted",
+        message: `The disaster "${deletedType}" has been removed successfully.`,
+        type: "Alert",
+      });
+    } catch (error) {
+      console.error("Error deleting disaster:", error);
+      setDeleteDialogMode("message");
+      setDeleteDialogTitle("Deletion Failed");
+      setDeleteDialogMessage(
+        "Failed to delete disaster. Please check database permissions and related records."
+      );
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -168,6 +233,58 @@ export default function DisastersPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={deleteDialogOpen} onOpenChange={(open) => !open && closeDeleteDialog()}>
+          <DialogContent className="sm:max-w-[460px]">
+            <DialogHeader className="border-b pb-4">
+              <DialogTitle className="text-2xl font-bold tracking-tight">
+                {deleteDialogTitle}
+              </DialogTitle>
+              <DialogDescription className="font-medium">
+                {deleteDialogMessage}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="bg-muted/20 p-4 -mx-6 -mb-6 border-t">
+              {deleteDialogMode === "confirm" ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="font-bold"
+                    onClick={() => closeDeleteDialog()}
+                    disabled={deletingId !== null}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="font-bold"
+                    onClick={handleDeleteDisaster}
+                    disabled={deletingId !== null}
+                  >
+                    {deletingId !== null ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      "Delete Disaster"
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  className="w-full font-bold"
+                  onClick={() => closeDeleteDialog()}
+                >
+                  Close
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="border-none shadow-xl overflow-hidden rounded-2xl border-t-4 border-t-primary">
@@ -233,7 +350,19 @@ export default function DisastersPage() {
                       <div className="flex justify-end gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary hover:bg-primary/10"><Eye className="w-4 h-4" /></Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 hover:text-primary hover:bg-primary/10"><Edit className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4" /></Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          disabled={deletingId === disaster.disaster_id}
+                          onClick={() => openDeleteDialog(disaster)}
+                        >
+                          {deletingId === disaster.disaster_id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

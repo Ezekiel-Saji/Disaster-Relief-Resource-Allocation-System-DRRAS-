@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface AreaRequest {
   request_id: number;
@@ -149,6 +150,12 @@ export default function RequestsPage() {
       await fetchRequests();
       setNewRequest({ area_id: "", resource_id: "", quantity: "", priority_id: newRequest.priority_id });
       setIsDialogOpen(false);
+      triggerInAppNotification({
+        page: "/requests",
+        title: "Request submitted",
+        message: "The request has been submitted successfully and is now pending allocation review.",
+        type: "Request",
+      });
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
       alert("Failed to submit request. Please check the console for details.");

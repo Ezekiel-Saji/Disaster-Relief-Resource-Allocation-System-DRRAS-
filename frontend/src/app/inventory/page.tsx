@@ -38,6 +38,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface InventoryItem {
   center_id: number;
@@ -71,6 +72,12 @@ export default function InventoryPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [currentItem, setCurrentItem] = useState<InventoryItem | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteDialogMode, setDeleteDialogMode] = useState<"confirm" | "message">("confirm");
+  const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
+  const [deleteDialogTitle, setDeleteDialogTitle] = useState("");
+  const [deleteDialogMessage, setDeleteDialogMessage] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const [formData, setFormData] = useState({
     center_id: "",
@@ -134,6 +141,12 @@ export default function InventoryPage() {
       await fetchInventory();
       setIsAddOpen(false);
       setFormData({ center_id: "", resource_id: "", available: "", reserved: "" });
+      triggerInAppNotification({
+        page: "/inventory",
+        title: "Inventory entry added",
+        message: "The inventory entry has been added successfully.",
+        type: "Info",
+      });
     } catch (error: any) {
       console.error("Error adding inventory:", error);
       alert(`Failed to add inventory entry: ${error?.message || error}`);
@@ -161,6 +174,12 @@ export default function InventoryPage() {
       await fetchInventory();
       setIsEditOpen(false);
       setCurrentItem(null);
+      triggerInAppNotification({
+        page: "/inventory",
+        title: "Inventory updated",
+        message: "Inventory values have been updated successfully.",
+        type: "Alert",
+      });
     } catch (error: any) {
       console.error("Error updating inventory:", error);
       alert(`Failed to update inventory: ${error?.message || error}`);
@@ -169,13 +188,57 @@ export default function InventoryPage() {
     }
   };
 
-  const handleDelete = async (itemId: number) => {
-    if (confirm("Are you sure you want to remove this item from inventory?")) {
-      try {
-        console.log("Direct table deletion required");
-      } catch (error) {
-        console.error("Error deleting inventory:", error);
-      }
+  const openDeleteDialog = (item: InventoryItem) => {
+    setDeleteTarget(item);
+    setDeleteDialogMode("confirm");
+    setDeleteDialogTitle("Delete Inventory Entry");
+    setDeleteDialogMessage(
+      `Delete the ${item.resource} inventory entry from ${item.center}? This action cannot be undone.`
+    );
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = (force = false) => {
+    if (deleting && !force) return;
+    setDeleteDialogOpen(false);
+    setDeleteDialogMode("confirm");
+    setDeleteTarget(null);
+    setDeleteDialogTitle("");
+    setDeleteDialogMessage("");
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("inventory")
+        .delete()
+        .eq("center_id", deleteTarget.center_id)
+        .eq("resource_id", deleteTarget.resource_id);
+
+      if (error) throw error;
+
+      await fetchInventory();
+      const deletedResource = deleteTarget.resource;
+      const deletedCenter = deleteTarget.center;
+      closeDeleteDialog(true);
+      triggerInAppNotification({
+        page: "/inventory",
+        title: "Inventory entry removed",
+        message: `The ${deletedResource} inventory entry at ${deletedCenter} has been removed successfully.`,
+        type: "Alert",
+      });
+    } catch (error: any) {
+      console.error("Error deleting inventory:", error);
+      setDeleteDialogMode("message");
+      setDeleteDialogTitle("Deletion Failed");
+      setDeleteDialogMessage(
+        `Failed to delete inventory entry: ${error?.message || error}`
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -423,7 +486,7 @@ export default function InventoryPage() {
                             <Edit className="w-4 h-4" /> Edit Stock
                           </DropdownMenuItem>
                           <DropdownMenuItem 
-                            onClick={() => handleDelete(item.resource_id)} 
+                            onClick={() => openDeleteDialog(item)} 
                             className="gap-2 cursor-pointer text-destructive focus:text-destructive font-medium"
                           >
                             <Trash2 className="w-4 h-4" /> Remove Lot
@@ -481,6 +544,59 @@ export default function InventoryPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => !open && closeDeleteDialog()}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold tracking-tight">
+              {deleteDialogTitle}
+            </DialogTitle>
+            <DialogDescription>
+              {deleteDialogMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            {deleteDialogMode === "confirm" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="font-bold"
+                  onClick={() => closeDeleteDialog()}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="font-bold"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete Entry"
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                className="w-full font-bold"
+                onClick={() => closeDeleteDialog()}
+                disabled={deleting}
+              >
+                Close
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,7 +1,6 @@
-import { Bell, Search, AlertCircle, LogOut, User as UserIcon } from "lucide-react";
+import { Search, AlertCircle, LogOut, User as UserIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import {
   DropdownMenu,
@@ -30,12 +29,6 @@ export function TopNav() {
       </div>
 
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5 text-foreground" />
-          <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary">
-            3
-          </Badge>
-        </Button>
         <Button variant="outline" className="gap-2 border-destructive text-destructive hover:bg-destructive/10">
           <AlertCircle className="w-4 h-4" /> 
           Emergency Alert
@@ -59,10 +52,6 @@ export function TopNav() {
               <DropdownMenuItem>
                 <UserIcon className="mr-2 h-4 w-4" />
                 <span>Profile</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell className="mr-2 h-4 w-4" />
-                <span>Notifications</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} variant="destructive">

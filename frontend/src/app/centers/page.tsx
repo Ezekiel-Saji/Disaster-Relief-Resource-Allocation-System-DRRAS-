@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface Center {
   center_id: number;
@@ -32,6 +33,12 @@ export default function CentersPage() {
   const [dialogMode, setDialogMode] = useState<"add" | "edit" | "view">("add");
   const [selectedCenter, setSelectedCenter] = useState<Center | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteDialogMode, setDeleteDialogMode] = useState<"confirm" | "message">("confirm");
+  const [deleteTarget, setDeleteTarget] = useState<Center | null>(null);
+  const [deleteDialogTitle, setDeleteDialogTitle] = useState("");
+  const [deleteDialogMessage, setDeleteDialogMessage] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   const [newCenter, setNewCenter] = useState({
     location: "",
@@ -98,6 +105,12 @@ export default function CentersPage() {
       await fetchCenters();
       setIsDialogOpen(false);
       setNewCenter({ location: "", storage_capacity: "" });
+      triggerInAppNotification({
+        page: "/centers",
+        title: "Relief center added",
+        message: `The relief center at "${newCenter.location}" has been added successfully.`,
+        type: "Info",
+      });
     } catch (error: any) {
       console.error("Error adding center:", error);
 
@@ -126,6 +139,12 @@ export default function CentersPage() {
           await fetchCenters();
           setIsDialogOpen(false);
           setNewCenter({ location: "", storage_capacity: "" });
+          triggerInAppNotification({
+            page: "/centers",
+            title: "Relief center added",
+            message: `The relief center at "${newCenter.location}" has been added successfully.`,
+            type: "Info",
+          });
           return;
         } catch (retryError: any) {
           console.error("Retry failed after schema reload:", retryError);
@@ -153,6 +172,12 @@ export default function CentersPage() {
           await fetchCenters();
           setIsDialogOpen(false);
           setNewCenter({ location: "", storage_capacity: "" });
+          triggerInAppNotification({
+            page: "/centers",
+            title: "Relief center added",
+            message: `The relief center at "${newCenter.location}" has been added successfully.`,
+            type: "Info",
+          });
           return;
         } catch (retryError: any) {
           console.error("Retry failed after missing column fallback:", retryError);
@@ -224,6 +249,12 @@ export default function CentersPage() {
 
       await fetchCenters();
       setIsDialogOpen(false);
+      triggerInAppNotification({
+        page: "/centers",
+        title: "Relief center updated",
+        message: "Relief center details have been updated successfully.",
+        type: "Info",
+      });
     } catch (error: any) {
       console.error("Error updating center:", error);
 
@@ -247,6 +278,12 @@ export default function CentersPage() {
 
           await fetchCenters();
           setIsDialogOpen(false);
+          triggerInAppNotification({
+            page: "/centers",
+            title: "Relief center updated",
+            message: "Relief center details have been updated successfully.",
+            type: "Info",
+          });
           return;
         } catch (retryError: any) {
           console.error("Retry failed after schema reload:", retryError);
@@ -272,6 +309,12 @@ export default function CentersPage() {
 
           await fetchCenters();
           setIsDialogOpen(false);
+          triggerInAppNotification({
+            page: "/centers",
+            title: "Relief center updated",
+            message: "Relief center details have been updated successfully.",
+            type: "Info",
+          });
           return;
         } catch (retryError: any) {
           console.error("Retry failed after missing column fallback:", retryError);
@@ -290,25 +333,71 @@ export default function CentersPage() {
     }
   };
 
-  const handleDeleteCenter = async (center: Center) => {
-    const confirmed = window.confirm(
+  const openDeleteDialog = (center: Center) => {
+    setDeleteTarget(center);
+    setDeleteDialogMode("confirm");
+    setDeleteDialogTitle("Delete Relief Center");
+    setDeleteDialogMessage(
       `Delete hub "${center.location}" (ID: ${center.center_id})? This action cannot be undone.`
     );
-    if (!confirmed) return;
+    setDeleteDialogOpen(true);
+  };
 
+  const closeDeleteDialog = (force = false) => {
+    if (deleting && !force) return;
+    setDeleteDialogOpen(false);
+    setDeleteDialogMode("confirm");
+    setDeleteTarget(null);
+    setDeleteDialogTitle("");
+    setDeleteDialogMessage("");
+  };
+
+  const handleDeleteCenter = async () => {
+    if (!deleteTarget) return;
+
+    setDeleting(true);
     setLoading(true);
     try {
+      const { count: allocationCount, error: allocationError } = await supabase
+        .from("allocation")
+        .select("allocation_id", { count: "exact", head: true })
+        .eq("center_id", deleteTarget.center_id);
+
+      if (allocationError) throw allocationError;
+
+      if ((allocationCount || 0) > 0) {
+        setDeleteDialogMode("message");
+        setDeleteDialogTitle("Deletion Not Permitted");
+        setDeleteDialogMessage(
+          `This relief center cannot be deleted because ${allocationCount} allocation record${allocationCount === 1 ? "" : "s"} still reference it. Please retain the center or reassign the related operational data first.`
+        );
+        return;
+      }
+
       const { error } = await supabase
         .from('relief_center')
         .delete()
-        .eq('center_id', center.center_id);
+        .eq('center_id', deleteTarget.center_id);
 
       if (error) throw error;
       await fetchCenters();
+      const deletedLocation = deleteTarget.location;
+      closeDeleteDialog(true);
+      triggerInAppNotification({
+        page: "/centers",
+        title: "Relief center removed",
+        message: `The relief center at "${deletedLocation}" has been removed successfully.`,
+        type: "Info",
+      });
     } catch (error: any) {
-      console.error("Error deleting center:", error);
-      alert(`Failed to delete relief center. ${formatSupabaseError(error)}`);
+      console.error("Error deleting center:", JSON.stringify(error, null, 2));
+      setDeleteDialogMode("message");
+      setDeleteDialogTitle("Deletion Failed");
+      setDeleteDialogMessage(
+        `Failed to delete relief center. ${formatSupabaseError(error)}`
+      );
     } finally {
+      setDeleting(false);
       setLoading(false);
     }
   };
@@ -413,6 +502,59 @@ export default function CentersPage() {
                 </Button>
               </DialogFooter>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={deleteDialogOpen} onOpenChange={(open) => !open && closeDeleteDialog()}>
+          <DialogContent className="sm:max-w-[460px]">
+            <DialogHeader className="border-b pb-4">
+              <DialogTitle className="text-2xl font-bold tracking-tight">
+                {deleteDialogTitle}
+              </DialogTitle>
+              <DialogDescription className="font-medium">
+                {deleteDialogMessage}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="bg-muted/20 p-4 -mx-6 -mb-6 border-t">
+              {deleteDialogMode === "confirm" ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="font-bold"
+                    onClick={() => closeDeleteDialog()}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="font-bold"
+                    onClick={handleDeleteCenter}
+                    disabled={deleting}
+                  >
+                    {deleting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      "Delete Center"
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  className="w-full font-bold"
+                  onClick={() => closeDeleteDialog()}
+                  disabled={deleting}
+                >
+                  Close
+                </Button>
+              )}
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -538,7 +680,7 @@ export default function CentersPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteCenter(center)}
+                          onClick={() => openDeleteDialog(center)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>

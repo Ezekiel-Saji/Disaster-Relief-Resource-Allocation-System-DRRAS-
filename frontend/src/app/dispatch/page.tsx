@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface Dispatch {
   dispatch_id: number;
@@ -114,6 +115,12 @@ export default function DispatchPage() {
       setFormData({
         allocation_id: "",
         expected_delivery_date: "",
+      });
+      triggerInAppNotification({
+        page: "/dispatch",
+        title: "Dispatch created",
+        message: "The dispatch has been created successfully and is now ready for delivery monitoring.",
+        type: "Dispatch",
       });
 
     } catch (error) {

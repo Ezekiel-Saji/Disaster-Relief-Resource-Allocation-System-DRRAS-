@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface DeliveryReport {
   report_id: number;
@@ -112,6 +113,12 @@ export default function DeliveriesPage() {
       setFormData({
         dispatch_id: "",
         received_quantity: "",
+      });
+      triggerInAppNotification({
+        page: "/deliveries",
+        title: "Delivery recorded",
+        message: "The delivery report has been recorded successfully. Verification and discrepancy details have been updated.",
+        type: "Delivery",
       });
 
     } catch (error) {

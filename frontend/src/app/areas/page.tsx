@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
+import { triggerInAppNotification } from "@/lib/page-notifications";
 
 interface AffectedArea {
   affected_id: string;
@@ -179,6 +180,12 @@ export default function AreasPage() {
         area_id: "",
         disaster_id: "",
         severity_score: "5",
+      });
+      triggerInAppNotification({
+        page: "/areas",
+        title: "Affected area linked",
+        message: "The affected area has been linked successfully. Resource requirements may now be submitted for operational review.",
+        type: "Alert",
       });
     } catch (error) {
       console.error("Error adding affected area via RPC:", error);
