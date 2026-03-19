@@ -33,6 +33,23 @@ interface AffectedArea {
   area_id: number;
 }
 
+interface AffectedAreaRow {
+  affected_id: number;
+  severity_score: number;
+  last_assistance_date: string | null;
+  area_id: number;
+  disaster_id: number;
+  area: {
+    area_name: string;
+    district: string;
+    state: string;
+    population: number;
+  }[] | null;
+  disaster: {
+    disaster_type: string;
+  }[] | null;
+}
+
 interface LookupArea {
   area_id: number;
   area_name: string;
@@ -67,14 +84,46 @@ export default function AreasPage() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('v_affected_areas')
-        .select('*')
+        .from("affected_area")
+        .select(`
+          affected_id,
+          severity_score,
+          last_assistance_date,
+          area_id,
+          disaster_id,
+          area:area_id (
+            area_name,
+            district,
+            state,
+            population
+          ),
+          disaster:disaster_id (
+            disaster_type
+          )
+        `)
         .order('severity_score', { ascending: false });
 
       if (error) throw error;
-      setAreas(data || []);
+      const normalizedAreas = ((data as AffectedAreaRow[] | null) || []).map((row) => {
+        const area = row.area?.[0];
+        const disaster = row.disaster?.[0];
+
+        return {
+        affected_id: row.affected_id,
+        area_name: area?.area_name ?? "Unknown Area",
+        district: area?.district ?? "Unknown District",
+        state: area?.state ?? "Unknown State",
+        disaster: disaster?.disaster_type ?? "Unknown Disaster",
+        population: area?.population ?? 0,
+        severity_score: row.severity_score,
+        last_assistance: row.last_assistance_date,
+        disaster_id: row.disaster_id,
+        area_id: row.area_id,
+      }});
+
+      setAreas(normalizedAreas);
     } catch (error) {
-      console.error('Error fetching areas:', error);
+      console.error("Error fetching areas:", JSON.stringify(error, null, 2));
     } finally {
       setLoading(false);
     }
@@ -82,14 +131,29 @@ export default function AreasPage() {
 
   async function fetchMetadata() {
     try {
-      const [{ data: areaData }, { data: disasterData }] = await Promise.all([
-        supabase.from('v_lookup_areas').select('area_id, area_name'),
-        supabase.from('v_disasters').select('disaster_id, disaster_type, location')
+      const [
+        { data: areaData, error: areaError },
+        { data: disasterData, error: disasterError },
+      ] = await Promise.all([
+        supabase.from("area").select("area_id, area_name").order("area_name"),
+        supabase
+          .from("disaster")
+          .select("disaster_id, disaster_type")
+          .order("disaster_type"),
       ]);
+
+      if (areaError) throw areaError;
+      if (disasterError) throw disasterError;
+
       setLookupAreas(areaData || []);
-      setLookupDisasters(disasterData || []);
+      setLookupDisasters(
+        (disasterData || []).map((disaster) => ({
+          ...disaster,
+          location: disaster.disaster_type,
+        }))
+      );
     } catch (error) {
-      console.error('Error fetching metadata:', error);
+      console.error("Error fetching metadata:", JSON.stringify(error, null, 2));
     }
   }
 
