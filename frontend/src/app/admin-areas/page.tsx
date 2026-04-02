@@ -66,7 +66,24 @@ export default function AdminAreasPage() {
         .order("area_name");
 
       if (error) throw error;
-      setAreas(data || []);
+      
+      // Normalize data: map 'area_name' to 'name' and parse coordinates
+      const normalizedData = (data || [])
+        .map(item => {
+          const lat = parseFloat(item.latitude);
+          const lng = parseFloat(item.longitude);
+          
+          return {
+            ...item,
+            area_id: item.area_id, // Ensure primary key is present
+            name: item.area_name || item.name || "Unnamed Area",
+            latitude: isNaN(lat) ? null : lat,
+            longitude: isNaN(lng) ? null : lng
+          };
+        })
+        .filter(item => item.area_id !== undefined && item.area_id !== null);
+      
+      setAreas(normalizedData);
     } catch (error) {
       console.error("Error fetching areas:", error);
     } finally {
