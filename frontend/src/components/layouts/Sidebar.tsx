@@ -2,6 +2,7 @@ import Link from "next/link";
 import { 
   Building2, 
   Map, 
+  MapPin,
   Package, 
   ShieldAlert, 
   LayoutDashboard, 
@@ -24,6 +25,7 @@ export function Sidebar() {
     { label: "Dashboard", icon: LayoutDashboard, href: "/", roles: ["admin", "officer", "manager"] },
     { label: "Disaster Management", icon: ShieldAlert, href: "/disasters", roles: ["admin", "officer"] },
     { label: "Affected Areas", icon: Map, href: "/areas", roles: ["admin", "officer"] },
+    { label: "Area Management", icon: MapPin, href: "/admin-areas", roles: ["admin"] },
     { label: "Relief Centers", icon: Building2, href: "/centers", roles: ["admin"] },
     { label: "Inventory", icon: Package, href: "/inventory", roles: ["admin", "manager"] },
     { label: "Area Requests", icon: FileText, href: "/requests", roles: ["admin", "officer"] },

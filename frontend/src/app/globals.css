@@ -1,3 +1,6 @@
+/* Leaflet CSS */
+@import "leaflet/dist/leaflet.css";
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
