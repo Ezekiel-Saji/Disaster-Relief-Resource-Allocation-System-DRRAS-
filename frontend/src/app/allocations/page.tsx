@@ -41,14 +41,34 @@ interface Allocation {
   request_status: string;
 }
 
+interface PendingRequest {
+  request_id: number;
+  area: string;
+  resource: string;
+  resource_id: number;
+}
+
+interface ReliefCenter {
+  center_id: number;
+  location: string | null;
+  name: string | null;
+}
+
+interface InventoryAvailability {
+  center_id: number;
+  resource_id: number;
+  dispatchable_quantity: number | null;
+}
+
 export default function AllocationsPage() {
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-  const [centers, setCenters] = useState<any[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [centers, setCenters] = useState<ReliefCenter[]>([]);
+  const [inventory, setInventory] = useState<InventoryAvailability[]>([]);
   const [allocationError, setAllocationError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
@@ -56,6 +76,21 @@ export default function AllocationsPage() {
     center_id: "",
     quantity: ""
   });
+
+  const selectedRequest = pendingRequests.find(
+    (req) => req.request_id?.toString() === formData.request_id
+  );
+
+  const selectedInventory = inventory.find(
+    (item) =>
+      item.center_id?.toString() === formData.center_id &&
+      item.resource_id === selectedRequest?.resource_id
+  );
+
+  const maxDispatchable =
+    typeof selectedInventory?.dispatchable_quantity === "number"
+      ? selectedInventory.dispatchable_quantity
+      : undefined;
 
   useEffect(() => {
     fetchAllocations();
@@ -81,24 +116,34 @@ export default function AllocationsPage() {
 
   async function fetchMetadata() {
     try {
-      const { data: requestsData, error: reqError } = await supabase
-        .from('v_area_requests')
-        .select('*')
-        .in('status', ['Pending', 'Approved'])
-        .order('request_id', { ascending: false });
-
-      const { data: centersData } = await supabase
-        .from('relief_center')
-        .select('center_id, location, name');
+      const [
+        { data: requestsData, error: reqError },
+        { data: centersData },
+        { data: inventoryData, error: inventoryError },
+      ] = await Promise.all([
+        supabase
+          .from('v_area_requests')
+          .select('*')
+          .in('status', ['Pending', 'Approved'])
+          .order('request_id', { ascending: false }),
+        supabase
+          .from('relief_center')
+          .select('center_id, location, name'),
+        supabase
+          .from('v_inventory')
+          .select('center_id, resource_id, dispatchable_quantity'),
+      ]);
 
       if (reqError) console.error('[Allocations] pending requests error:', reqError);
+      if (inventoryError) console.error('[Allocations] inventory error:', inventoryError);
         
       const uniqueRequests = Array.from(
-        new Map((requestsData || []).map(req => [req.request_id, req])).values()
+        new Map((requestsData || []).map((req) => [req.request_id, req])).values()
       );
 
       setPendingRequests(uniqueRequests);
       setCenters(centersData || []);
+      setInventory(inventoryData || []);
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
     }
@@ -128,10 +173,15 @@ export default function AllocationsPage() {
         message: "Resource allocation has been authorized successfully. Dispatch processing may now proceed.",
         type: "Info",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log(JSON.stringify(error, null, 2));
       // Surface the trigger's error message directly in the dialog
-      const raw = error?.message || error?.details || "Failed to authorize allocation.";
+      const raw =
+        error && typeof error === "object"
+          ? ("message" in error && typeof error.message === "string" && error.message) ||
+            ("details" in error && typeof error.details === "string" && error.details) ||
+            "Failed to authorize allocation."
+          : "Failed to authorize allocation.";
       // Trim the technical prefix Postgres adds (e.g. "ERROR: ", "PGRST116: ")
       const clean = raw.replace(/^(ERROR|PGRST\w+):\s*/i, "");
       setAllocationError(clean);
