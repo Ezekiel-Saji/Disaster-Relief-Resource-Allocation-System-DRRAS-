@@ -93,7 +93,13 @@ export default function RequestsPage() {
     try {
       const { data: areasData } = await supabase.from('v_lookup_areas').select('*');
       const { data: resourcesData } = await supabase.from('v_lookup_resources').select('*');
-      const { data: prioritiesData } = await supabase.from('v_lookup_priorities').select('*');
+      // Query priority_level directly — v_lookup_priorities may not exist
+      const { data: prioritiesData, error: priorityError } = await supabase
+        .from('priority_level')
+        .select('priority_id, level_name, weight_score')
+        .order('weight_score', { ascending: false });
+
+      if (priorityError) console.error('[Requests] priority fetch error:', priorityError);
       
       const uniqueAreas = Array.from(
         new Map((areasData || []).map(a => [a.area_id, a])).values()
@@ -108,21 +114,16 @@ export default function RequestsPage() {
       setAreas(uniqueAreas);
       setResources(uniqueResources);
       setPriorities(uniquePriorities);
-      
-      // Default priority if available
-      // if (prioritiesData && prioritiesData.length > 0) {
-      //   setNewRequest(prev => ({ ...prev, priority_id: prioritiesData.find(p => p.name === 'Medium')?.id.toString() || prioritiesData[0].id.toString() }));
-      // }
+
       if (prioritiesData && prioritiesData.length > 0) {
-        console.log("prioritiesData:", prioritiesData);
-  setNewRequest(prev => ({
-    ...prev,
-    priority_id:
-      prioritiesData.find(p => p.priority_name === "Medium")?.priority_id?.toString() ??
-      prioritiesData[0]?.priority_id?.toString() ??
-      ""
-  }));
-}
+        setNewRequest(prev => ({
+          ...prev,
+          priority_id:
+            prioritiesData.find(p => p.level_name === "Medium")?.priority_id?.toString() ??
+            prioritiesData[0]?.priority_id?.toString() ??
+            ""
+        }));
+      }
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
     }
@@ -251,7 +252,7 @@ export default function RequestsPage() {
                       <SelectContent>
                         {priorities.map((p) => (
                           <SelectItem key={p.priority_id} value={p.priority_id?.toString() ?? ""}>
-                            {p.priority_name}
+                          {p.level_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
