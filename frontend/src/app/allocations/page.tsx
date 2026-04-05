@@ -51,7 +51,6 @@ interface PendingRequest {
 interface ReliefCenter {
   center_id: number;
   location: string | null;
-  name: string | null;
 }
 
 interface InventoryAvailability {
@@ -118,7 +117,7 @@ export default function AllocationsPage() {
     try {
       const [
         { data: requestsData, error: reqError },
-        { data: centersData },
+        { data: centersData, error: centersError },
         { data: inventoryData, error: inventoryError },
       ] = await Promise.all([
         supabase
@@ -127,14 +126,15 @@ export default function AllocationsPage() {
           .in('status', ['Pending', 'Approved'])
           .order('request_id', { ascending: false }),
         supabase
-          .from('relief_center')
-          .select('center_id, location, name'),
+          .from('v_relief_centers')
+          .select('center_id, location'),
         supabase
           .from('v_inventory')
           .select('center_id, resource_id, dispatchable_quantity'),
       ]);
 
       if (reqError) console.error('[Allocations] pending requests error:', reqError);
+      if (centersError) console.error('[Allocations] centers error:', centersError);
       if (inventoryError) console.error('[Allocations] inventory error:', inventoryError);
         
       const uniqueRequests = Array.from(
@@ -245,7 +245,7 @@ export default function AllocationsPage() {
                     <SelectContent>
                       {centers.map((center) => (
                         <SelectItem key={center.center_id} value={center.center_id?.toString() ?? ""}>
-                          {center.location || center.name}
+                          {center.location}
                         </SelectItem>
                       ))}
                     </SelectContent>
