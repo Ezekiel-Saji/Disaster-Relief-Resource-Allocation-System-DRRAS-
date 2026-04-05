@@ -49,6 +49,7 @@ export default function AllocationsPage() {
   
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [centers, setCenters] = useState<any[]>([]);
+  const [allocationError, setAllocationError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     request_id: "",
@@ -86,21 +87,18 @@ export default function AllocationsPage() {
         .in('status', ['Pending', 'Approved'])
         .order('request_id', { ascending: false });
 
-      const { data: centersData } = await supabase.from('v_lookup_centers_with_stock').select('*');
+      const { data: centersData } = await supabase
+        .from('relief_center')
+        .select('center_id, location, name');
 
       if (reqError) console.error('[Allocations] pending requests error:', reqError);
         
-      // Deduplicate requests by request_id just in case the view returns duplicates due to joins
       const uniqueRequests = Array.from(
         new Map((requestsData || []).map(req => [req.request_id, req])).values()
       );
 
-      const uniqueCenters = Array.from(
-        new Map((centersData || []).map(c => [c.center_id, c])).values()
-      );
-
       setPendingRequests(uniqueRequests);
-      setCenters(uniqueCenters);
+      setCenters(centersData || []);
     } catch (error) {
       console.log(JSON.stringify(error, null, 2));
     }
@@ -109,6 +107,7 @@ export default function AllocationsPage() {
   const handleAuthorize = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setAllocationError(null);
     
     try {
       const { error } = await supabase.rpc('fn_process_allocation', {
@@ -122,16 +121,20 @@ export default function AllocationsPage() {
       await fetchAllocations();
       setIsAddOpen(false);
       setFormData({ request_id: "", center_id: "", quantity: "" });
+      setAllocationError(null);
       triggerInAppNotification({
         page: "/allocations",
         title: "Allocation authorized",
         message: "Resource allocation has been authorized successfully. Dispatch processing may now proceed.",
         type: "Info",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.log(JSON.stringify(error, null, 2));
-      const message = error instanceof Error ? error.message : "Failed to authorize allocation";
-      alert(message + ". Note: Allocation will fail if center stock buffer is breached.");
+      // Surface the trigger's error message directly in the dialog
+      const raw = error?.message || error?.details || "Failed to authorize allocation.";
+      // Trim the technical prefix Postgres adds (e.g. "ERROR: ", "PGRST116: ")
+      const clean = raw.replace(/^(ERROR|PGRST\w+):\s*/i, "");
+      setAllocationError(clean);
     } finally {
       setSubmitting(false);
     }
@@ -164,7 +167,7 @@ export default function AllocationsPage() {
                   </Label>
                   <Select 
                     value={formData.request_id} 
-                    onValueChange={(val) => setFormData({...formData, request_id: val ?? ""})}
+                    onValueChange={(val) => setFormData({ request_id: val ?? "", center_id: "", quantity: "" })}
                   >
                     <SelectTrigger id="request_id" className="bg-muted/30">
                       <SelectValue placeholder="Identify Request" />
@@ -192,7 +195,7 @@ export default function AllocationsPage() {
                     <SelectContent>
                       {centers.map((center) => (
                         <SelectItem key={center.center_id} value={center.center_id?.toString() ?? ""}>
-                          {center.location} (Stock: {center.dispatchable_quantity})
+                          {center.location || center.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -205,12 +208,21 @@ export default function AllocationsPage() {
                   <Input 
                     id="quantity" 
                     type="number" 
-                    placeholder="e.g. 100"
+                    placeholder={maxDispatchable !== undefined ? `Max: ${maxDispatchable}` : "e.g. 100"}
                     value={formData.quantity}
+                    min={1}
+                    max={maxDispatchable}
                     onChange={(e) => setFormData({...formData, quantity: e.target.value})}
                     required 
+                    disabled={!formData.center_id}
                     className="bg-muted/30 font-medium"
                   />
+                  {maxDispatchable !== undefined && (
+                    <p className="text-[10px] text-muted-foreground font-medium">
+                      Max dispatchable: <span className="font-black text-primary">{maxDispatchable}</span> units
+                      {selectedRequest && <> of {selectedRequest.resource}</>}
+                    </p>
+                  )}
                 </div>
               </div>
               <DialogFooter>
@@ -219,8 +231,15 @@ export default function AllocationsPage() {
                   Authorize Allocation
                 </Button>
               </DialogFooter>
+              {allocationError && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5">
+                  <AlertCircle className="w-4 h-4 text-destructive mt-0.5 shrink-0" />
+                  <p className="text-xs font-semibold text-destructive leading-snug">{allocationError}</p>
+                </div>
+              )}
             </form>
           </DialogContent>
+
         </Dialog>
       </div>
 
