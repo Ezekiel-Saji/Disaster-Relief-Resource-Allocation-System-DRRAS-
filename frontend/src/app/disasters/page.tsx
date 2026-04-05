@@ -26,7 +26,7 @@ interface Disaster {
   disaster_type: string;
   severity_level: string;
   start_date: string;
-  location: string; // Enriched from v_disasters (first affected area)
+  location: string; // Latest affected area (computed client-side)
 }
 
 export default function DisastersPage() {
@@ -54,13 +54,40 @@ export default function DisastersPage() {
   async function fetchDisasters() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('v_disasters')
-        .select('*')
-        .order('start_date', { ascending: false });
 
-      if (error) throw error;
-      setDisasters(data || []);
+      // Fetch disasters + affected_area links + area names in parallel
+      const [disasterRes, affectedRes, areaRes] = await Promise.all([
+        supabase.from('v_disasters').select('*').order('start_date', { ascending: false }),
+        supabase.from('affected_area').select('area_id, disaster_id'),
+        supabase.from('area').select('area_id, name'),
+      ]);
+
+      if (disasterRes.error) throw disasterRes.error;
+
+      // Build area_id → area name lookup
+      const areaNameMap = new Map<number, string>(
+        (areaRes.data || []).map((a: any) => [a.area_id, a.name])
+      );
+
+      // Build disaster_id → latest area name (highest area_id = most recently linked)
+      const maxAreaIdMap = new Map<number, number>();
+      for (const row of (affectedRes.data || []) as any[]) {
+        const current = maxAreaIdMap.get(row.disaster_id) ?? -1;
+        if (row.area_id > current) maxAreaIdMap.set(row.disaster_id, row.area_id);
+      }
+      const latestAreaMap = new Map<number, string>();
+      maxAreaIdMap.forEach((areaId, disasterId) => {
+        const name = areaNameMap.get(areaId);
+        if (name) latestAreaMap.set(disasterId, name);
+      });
+
+      // Override location with the latest area
+      const enriched = (disasterRes.data || []).map((d: any) => ({
+        ...d,
+        location: latestAreaMap.get(d.disaster_id) || d.location || 'No areas linked',
+      }));
+
+      setDisasters(enriched);
     } catch (error) {
       console.error('Error fetching disasters:', error);
     } finally {
@@ -72,9 +99,14 @@ export default function DisastersPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // Calling fn_add_disaster(p_disaster_type, p_severity_level, p_start_date)
+      // Normalize: trim + Title Case so "FLOOD", "flood", " Flood " → "Flood"
+      const normalizedType = newDisaster.type
+        .trim()
+        .toLowerCase()
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
       const { error } = await supabase.rpc('fn_add_disaster', {
-        p_disaster_type: newDisaster.type,
+        p_disaster_type: normalizedType,
         p_severity_level: newDisaster.severity,
         p_start_date: newDisaster.date
       });
