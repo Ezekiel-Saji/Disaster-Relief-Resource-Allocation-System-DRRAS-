@@ -80,8 +80,15 @@ export default function AllocationsPage() {
 
   async function fetchMetadata() {
     try {
-      const { data: requestsData } = await supabase.from('v_pending_requests').select('*');
+      const { data: requestsData, error: reqError } = await supabase
+        .from('v_area_requests')
+        .select('*')
+        .in('status', ['Pending', 'Approved'])
+        .order('request_id', { ascending: false });
+
       const { data: centersData } = await supabase.from('v_lookup_centers_with_stock').select('*');
+
+      if (reqError) console.error('[Allocations] pending requests error:', reqError);
         
       // Deduplicate requests by request_id just in case the view returns duplicates due to joins
       const uniqueRequests = Array.from(
