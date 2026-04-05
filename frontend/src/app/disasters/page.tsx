@@ -81,13 +81,52 @@ export default function DisastersPage() {
         if (name) latestAreaMap.set(disasterId, name);
       });
 
-      // Override location with the latest area
+      // Enrich each disaster with its latest area name
       const enriched = (disasterRes.data || []).map((d: any) => ({
         ...d,
+        // Normalize type for consistent display: "FLOOD" / "flood" → "Flood"
+        disaster_type: d.disaster_type
+          .trim()
+          .toLowerCase()
+          .replace(/\b\w/g, (c: string) => c.toUpperCase()),
         location: latestAreaMap.get(d.disaster_id) || d.location || 'No areas linked',
       }));
 
-      setDisasters(enriched);
+      // Group by normalized type, keeping the most recent disaster (highest id) as representative
+      const typeGroups = new Map<string, any[]>();
+      for (const d of enriched) {
+        const key = d.disaster_type.toLowerCase();
+        if (!typeGroups.has(key)) typeGroups.set(key, []);
+        typeGroups.get(key)!.push(d);
+      }
+
+      // For each group: pick the representative by latest start_date,
+      // and find the area from the most recent disaster in the group that has one
+      const deduped = Array.from(typeGroups.values()).map((group) => {
+        // Sort group by start_date descending
+        const sorted = [...group].sort(
+          (a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+        );
+
+        // Representative = latest start_date
+        const representative = sorted[0];
+
+        // Area = from the latest-dated disaster in the group that has an area linked
+        const disasterWithArea = sorted.find(
+          (d) => maxAreaIdMap.has(d.disaster_id)
+        );
+        const areaId = disasterWithArea
+          ? maxAreaIdMap.get(disasterWithArea.disaster_id)
+          : null;
+        const latestAreaName = areaId ? areaNameMap.get(areaId) : null;
+
+        return {
+          ...representative,
+          location: latestAreaName || representative.location || 'No areas linked',
+        };
+      });
+
+      setDisasters(deduped);
     } catch (error) {
       console.error('Error fetching disasters:', error);
     } finally {

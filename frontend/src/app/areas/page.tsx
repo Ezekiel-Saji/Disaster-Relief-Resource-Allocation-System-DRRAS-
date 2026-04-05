@@ -143,8 +143,8 @@ export default function AreasPage() {
         supabase.from("area").select("area_id, area_name").order("area_name"),
         supabase
           .from("disaster")
-          .select("disaster_id, disaster_type")
-          .order("disaster_type"),
+          .select("disaster_id, disaster_type, start_date")
+          .order("disaster_id", { ascending: false }), // newest first
       ]);
 
       if (areaError) throw areaError;
@@ -247,8 +247,14 @@ export default function AreasPage() {
                     </SelectTrigger>
                     <SelectContent>
                       {lookupDisasters.map((d) => (
-                        <SelectItem key={d.disaster_id} value={d.disaster_id ?.toString() ?? ""}>
-                          {d.disaster_type} ({d.location})
+                        <SelectItem key={d.disaster_id} value={d.disaster_id?.toString() ?? ""}>
+                          <span className="font-mono text-xs text-muted-foreground mr-1">#{d.disaster_id}</span>
+                          {" "}{d.disaster_type}
+                          {(d as any).start_date && (
+                            <span className="text-muted-foreground ml-1">
+                              · {new Date((d as any).start_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>
