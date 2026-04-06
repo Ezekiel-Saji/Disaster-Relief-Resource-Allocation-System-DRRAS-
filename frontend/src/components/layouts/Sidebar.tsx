@@ -35,7 +35,7 @@ export function Sidebar() {
     { label: "Weather Monitoring", icon: CloudLightning, href: "/weather", roles: ["admin", "officer"] },
     { label: "Disaster History", icon: History, href: "/history", roles: ["admin", "officer"] },
     { label: "Risk Prediction", icon: Activity, href: "/predictions", roles: ["admin"] },
-    { label: "Reports & Analytics", icon: BarChart3, href: "/reports", roles: ["admin"] },
+    // { label: "Reports & Analytics", icon: BarChart3, href: "/reports", roles: ["admin"] },
     { label: "Settings", icon: Settings, href: "/settings", roles: ["admin"] },
   ];
 
